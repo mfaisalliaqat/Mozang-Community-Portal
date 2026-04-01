@@ -7,57 +7,71 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("mozang.db");
+let db: any;
+try {
+  console.log('Initializing database...');
+  db = new Database("mozang.db");
+  console.log('Database initialized successfully');
+} catch (error) {
+  console.error('Failed to initialize database:', error);
+  process.exit(1);
+}
 
 // Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL,
-    dept TEXT,
-    deptName TEXT,
-    avatar TEXT,
-    color TEXT
-  );
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL,
+      dept TEXT,
+      deptName TEXT,
+      avatar TEXT,
+      color TEXT
+    );
 
-  CREATE TABLE IF NOT EXISTS departments (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    icon TEXT NOT NULL
-  );
+    CREATE TABLE IF NOT EXISTS departments (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      icon TEXT NOT NULL
+    );
 
-  CREATE TABLE IF NOT EXISTS complaints (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    status TEXT NOT NULL,
-    priority TEXT NOT NULL,
-    date TEXT NOT NULL,
-    resident TEXT NOT NULL,
-    residentId TEXT NOT NULL,
-    area TEXT NOT NULL
-  );
+    CREATE TABLE IF NOT EXISTS complaints (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      date TEXT NOT NULL,
+      resident TEXT NOT NULL,
+      residentId TEXT NOT NULL,
+      area TEXT NOT NULL
+    );
 
-  CREATE TABLE IF NOT EXISTS timeline (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    complaintId TEXT NOT NULL,
-    time TEXT NOT NULL,
-    text TEXT NOT NULL,
-    FOREIGN KEY (complaintId) REFERENCES complaints(id) ON DELETE CASCADE
-  );
+    CREATE TABLE IF NOT EXISTS timeline (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      complaintId TEXT NOT NULL,
+      time TEXT NOT NULL,
+      text TEXT NOT NULL,
+      FOREIGN KEY (complaintId) REFERENCES complaints(id) ON DELETE CASCADE
+    );
 
-  CREATE TABLE IF NOT EXISTS announcements (
-    id TEXT PRIMARY KEY,
-    tag TEXT NOT NULL,
-    title TEXT NOT NULL,
-    text TEXT NOT NULL,
-    date TEXT NOT NULL
-  );
-`);
+    CREATE TABLE IF NOT EXISTS announcements (
+      id TEXT PRIMARY KEY,
+      tag TEXT NOT NULL,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      date TEXT NOT NULL
+    );
+  `);
+  console.log('Database schema verified');
+} catch (error) {
+  console.error('Failed to verify database schema:', error);
+  process.exit(1);
+}
 
 // Seed initial admin if none exists
 const adminExists = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get() as { count: number };
@@ -88,9 +102,13 @@ if (deptsExist.count === 0) {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
+
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
 
   // Logging middleware for API requests
   app.use((req, res, next) => {
