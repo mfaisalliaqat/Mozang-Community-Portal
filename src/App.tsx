@@ -76,9 +76,9 @@ export default function AppWrapper() {
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loginEmail, setLoginEmail] = useState('admin@mozang.com');
-  const [loginPass, setLoginPass] = useState('admin');
-  const [loginRole, setLoginRole] = useState<Role>('admin');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginRole, setLoginRole] = useState<Role>('resident');
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -114,6 +114,7 @@ function App() {
 
   // --- DATA FETCHING ---
   const fetchData = async () => {
+    console.log('Fetching data from API...');
     try {
       const [usersRes, deptsRes, complaintsRes, annRes] = await Promise.all([
         fetch('/api/users'),
@@ -129,6 +130,7 @@ function App() {
         annRes.json()
       ]);
 
+      console.log('Data fetched successfully:', { users: uList.length, depts: dList.length });
       setUsers(uList);
       setDepartments(dList);
       setComplaints(cList);
@@ -144,22 +146,30 @@ function App() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    console.log('Users state updated:', users.length, 'users loaded');
+  }, [users]);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
   const handleLogin = () => {
+    console.log('Attempting login with:', { loginEmail, loginRole, usersCount: users.length });
     const u = users.find(u => u.email === loginEmail && u.password === loginPass);
     if (!u) {
+      console.log('User not found in:', users.map(u => u.email));
       showToast('Invalid credentials.');
       return;
     }
     if (u.role !== loginRole) {
+      console.log('Role mismatch:', { userRole: u.role, loginRole });
       showToast('Role mismatch.');
       return;
     }
     
+    console.log('Login successful:', u.name);
     setCurrentUser(u);
     setCurrentPage('dashboard');
   };

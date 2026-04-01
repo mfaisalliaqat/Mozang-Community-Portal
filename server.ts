@@ -60,12 +60,13 @@ db.exec(`
 `);
 
 // Seed initial admin if none exists
-const adminExists = db.prepare("SELECT count(*) as count FROM users WHERE id = 'A001'").get() as { count: number };
+const adminExists = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get() as { count: number };
 if (adminExists.count === 0) {
   db.prepare(`
     INSERT INTO users (id, name, email, password, role, avatar, color)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run('A001', 'System Admin', 'admin@mozang.com', 'admin', 'admin', 'SA', '#c8502a');
+  console.log('Seeded initial admin user');
 }
 
 // Seed initial departments if none exist
