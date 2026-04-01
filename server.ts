@@ -66,6 +66,11 @@ try {
       text TEXT NOT NULL,
       date TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
   console.log('Database schema verified');
 } catch (error) {
@@ -98,6 +103,15 @@ if (deptsExist.count === 0) {
   for (const d of depts) {
     insertDept.run(d.id, d.name, d.icon);
   }
+  console.log('Seeded initial departments');
+}
+
+// Seed initial settings if none exist
+const settingsExist = db.prepare("SELECT count(*) as count FROM settings").get() as { count: number };
+if (settingsExist.count === 0) {
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('issues_resolved', '0');
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('departments_count', '6');
+  console.log('Seeded initial settings');
 }
 
 async function startServer() {
@@ -275,6 +289,32 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error deleting announcement:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Settings
+  app.get("/api/settings", (req, res) => {
+    try {
+      const settings = db.prepare("SELECT * FROM settings").all();
+      const result = settings.reduce((acc: any, curr: any) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {});
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error fetching settings:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/settings", (req, res) => {
+    const { key, value } = req.body;
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, String(value));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating setting:', error);
+      res.status(400).json({ error: error.message });
     }
   });
 

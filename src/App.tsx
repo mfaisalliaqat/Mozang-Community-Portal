@@ -85,6 +85,10 @@ function App() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [settings, setSettings] = useState<Record<string, string>>({
+    issues_resolved: '0',
+    departments_count: '6'
+  });
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -121,7 +125,8 @@ function App() {
         { name: 'users', url: '/api/users' },
         { name: 'departments', url: '/api/departments' },
         { name: 'complaints', url: '/api/complaints' },
-        { name: 'announcements', url: '/api/announcements' }
+        { name: 'announcements', url: '/api/announcements' },
+        { name: 'settings', url: '/api/settings' }
       ];
 
       const results = await Promise.all(endpoints.map(async (e) => {
@@ -138,19 +143,21 @@ function App() {
         return res.json();
       }));
 
-      const [uList, dList, cList, aList] = results;
+      const [uList, dList, cList, aList, sList] = results;
 
       console.log('Data fetched successfully:', {
         users: uList.length,
         depts: dList.length,
         complaints: cList.length,
-        announcements: aList.length
+        announcements: aList.length,
+        settings: Object.keys(sList).length
       });
 
       setUsers(uList);
       setDepartments(dList);
       setComplaints(cList);
       setAnnouncements(aList);
+      setSettings(sList);
 
       if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
     } catch (error) {
@@ -386,6 +393,21 @@ function App() {
     }
   };
 
+  const updateSetting = async (key: string, value: string) => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value })
+      });
+      if (!res.ok) throw new Error('Failed to update setting');
+      showToast('Setting updated successfully!');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
   // --- RENDER HELPERS ---
   const getMyComplaints = () => complaints.filter(c => c.residentId === currentUser?.id);
   const getDeptComplaints = () => complaints.filter(c => c.category === currentUser?.dept);
@@ -409,11 +431,11 @@ function App() {
           
           <div className="flex gap-12 relative z-10 mt-12">
             <div>
-              <div className="text-3xl font-serif text-white">0</div>
+              <div className="text-3xl font-serif text-white">{settings.issues_resolved || '0'}</div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest">Issues Resolved</div>
             </div>
             <div>
-              <div className="text-3xl font-serif text-white">6</div>
+              <div className="text-3xl font-serif text-white">{settings.departments_count || '6'}</div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest">Departments</div>
             </div>
           </div>
@@ -585,6 +607,12 @@ function App() {
                       active={currentPage === 'departments'} 
                       onClick={() => setCurrentPage('departments')} 
                     />
+                    <SidebarItem 
+                      icon={<Filter size={18} />} 
+                      label="Portal Settings" 
+                      active={currentPage === 'portal-settings'} 
+                      onClick={() => setCurrentPage('portal-settings')} 
+                    />
                   </>
                 )}
               </div>
@@ -688,6 +716,12 @@ function App() {
                   departments={departments}
                 />
               )}
+              {currentPage === 'portal-settings' && (
+                <PortalSettingsView 
+                  settings={settings}
+                  onUpdate={updateSetting}
+                />
+              )}
               {currentPage === 'manage-departments' && (
                 <AdminDeptsView 
                   departments={departments}
@@ -767,6 +801,60 @@ function SidebarItem({ icon, label, active, onClick, count }: { icon: React.Reac
         </span>
       )}
     </button>
+  );
+}
+
+function PortalSettingsView({ settings, onUpdate }: any) {
+  const [issuesResolved, setIssuesResolved] = useState(settings.issues_resolved || '0');
+  const [deptsCount, setDeptsCount] = useState(settings.departments_count || '6');
+
+  useEffect(() => {
+    setIssuesResolved(settings.issues_resolved || '0');
+    setDeptsCount(settings.departments_count || '6');
+  }, [settings]);
+
+  const handleSave = () => {
+    onUpdate('issues_resolved', issuesResolved);
+    onUpdate('departments_count', deptsCount);
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Portal Settings</h1>
+        <p className="text-muted mt-1">Manage the statistics displayed on the login page.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Issues Resolved Count</label>
+            <input 
+              type="number" 
+              value={issuesResolved}
+              onChange={(e) => setIssuesResolved(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Departments Count</label>
+            <input 
+              type="number" 
+              value={deptsCount}
+              onChange={(e) => setDeptsCount(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            />
+          </div>
+        </div>
+
+        <button 
+          onClick={handleSave}
+          className="px-8 py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+        >
+          Save Settings
+        </button>
+      </div>
+    </div>
   );
 }
 
