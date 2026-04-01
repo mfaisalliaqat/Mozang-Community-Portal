@@ -56,6 +56,8 @@ try {
       complaintId TEXT NOT NULL,
       time TEXT NOT NULL,
       text TEXT NOT NULL,
+      authorId TEXT,
+      authorName TEXT,
       FOREIGN KEY (complaintId) REFERENCES complaints(id) ON DELETE CASCADE
     );
 
@@ -72,6 +74,11 @@ try {
       value TEXT NOT NULL
     );
   `);
+
+  // Migration for existing databases
+  try { db.prepare("ALTER TABLE timeline ADD COLUMN authorId TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE timeline ADD COLUMN authorName TEXT").run(); } catch (e) {}
+
   console.log('Database schema verified');
 } catch (error) {
   console.error('Failed to verify database schema:', error);
@@ -205,11 +212,16 @@ async function startServer() {
   app.get("/api/complaints", (req, res) => {
     try {
       const complaints = db.prepare("SELECT * FROM complaints").all() as any[];
-      const timeline = db.prepare("SELECT * FROM timeline").all() as any[];
+      const timeline = db.prepare("SELECT * FROM timeline ORDER BY id ASC").all() as any[];
       
       const result = complaints.map(c => ({
         ...c,
-        timeline: timeline.filter(t => t.complaintId === c.id).map(t => ({ time: t.time, text: t.text }))
+        timeline: timeline.filter(t => t.complaintId === c.id).map(t => ({ 
+          time: t.time, 
+          text: t.text,
+          authorId: t.authorId,
+          authorName: t.authorName
+        }))
       }));
       
       res.json(result);
@@ -228,9 +240,9 @@ async function startServer() {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(id, category, description, status, priority, date, resident, residentId, address, contact);
         
-        const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text) VALUES (?, ?, ?)");
+        const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {
-          insertTimeline.run(id, t.time, t.text);
+          insertTimeline.run(id, t.time, t.text, t.authorId || residentId, t.authorName || resident);
         }
       });
       insertComplaint();
@@ -249,7 +261,8 @@ async function startServer() {
           db.prepare("UPDATE complaints SET status = ? WHERE id = ?").run(status, req.params.id);
         }
         if (timelineEntry) {
-          db.prepare("INSERT INTO timeline (complaintId, time, text) VALUES (?, ?, ?)").run(req.params.id, timelineEntry.time, timelineEntry.text);
+          db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)")
+            .run(req.params.id, timelineEntry.time, timelineEntry.text, timelineEntry.authorId, timelineEntry.authorName);
         }
       });
       update();

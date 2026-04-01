@@ -45,6 +45,8 @@ export interface Complaint {
 export interface TimelineItem {
   time: string;
   text: string;
+  authorId?: string;
+  authorName?: string;
 }
 
 export interface Announcement {

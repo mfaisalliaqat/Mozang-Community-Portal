@@ -19,7 +19,10 @@ import {
   ChevronRight,
   ArrowRight,
   ShieldAlert,
-  Phone
+  Phone,
+  Facebook,
+  Map,
+  Users2
 } from 'lucide-react';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
@@ -299,7 +302,12 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
-      timeline: [{ time: today, text: 'Complaint submitted by resident' }]
+      timeline: [{ 
+        time: today, 
+        text: 'Complaint submitted by resident',
+        authorId: currentUser?.id,
+        authorName: currentUser?.name
+      }]
     };
     
     try {
@@ -339,12 +347,40 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status,
-          timelineEntry: { time: today, text: msgs[status] }
+          timelineEntry: { 
+            time: today, 
+            text: msgs[status],
+            authorId: currentUser?.id,
+            authorName: currentUser?.name
+          }
         })
       });
       if (!res.ok) throw new Error('Failed to update status');
       showToast(`Status updated to ${status}`);
       setSelectedComplaint(null);
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const addComment = async (id: string, text: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const res = await fetch(`/api/complaints/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timelineEntry: { 
+            time: today, 
+            text,
+            authorId: currentUser?.id,
+            authorName: currentUser?.name
+          }
+        })
+      });
+      if (!res.ok) throw new Error('Failed to add comment');
+      showToast('Comment added');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -413,81 +449,152 @@ function App() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen flex flex-col md:flex-row">
+      <div className="min-h-screen flex flex-col md:flex-row bg-paper">
         {/* Login Art */}
         <div className="flex-1 bg-ink p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] rounded-full bg-radial from-accent/25 to-transparent"></div>
-          <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/20 to-transparent"></div>
+          {/* Decorative Elements */}
+          <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] rounded-full bg-radial from-accent/20 to-transparent blur-3xl"></div>
+          <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/15 to-transparent blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-radial from-white/5 to-transparent blur-3xl"></div>
           
-          <div className="text-2xl font-serif text-white relative z-10">
-            Mozang <span className="text-accent">Community Portal</span>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 text-2xl font-serif text-white relative z-10"
+          >
+            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30">
+              <Building2 size={24} className="text-white" />
+            </div>
+            <span>Mozang <span className="text-accent">Community Portal</span></span>
+          </motion.div>
           
           <div className="relative z-10 max-w-lg">
-            <h1 className="text-4xl md:text-6xl text-white mb-6 leading-tight">Your voice.<br />Your community.</h1>
-            <p className="text-white/60 text-lg leading-relaxed">Submit complaints, track progress, and stay connected with the departments that serve you.</p>
+            <motion.h1 
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-5xl md:text-7xl text-white mb-6 font-serif leading-tight tracking-tight"
+            >
+              Your voice.<br />
+              <span className="text-accent">Your community.</span>
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-white/60 text-xl leading-relaxed font-light"
+            >
+              Building a better Mozang together. Submit complaints, track progress, and stay connected with the departments that serve you.
+            </motion.p>
           </div>
           
-          <div className="flex gap-12 relative z-10 mt-12">
-            <div>
-              <div className="text-3xl font-serif text-white">{settings.issues_resolved || '0'}</div>
-              <div className="text-[10px] text-white/40 uppercase tracking-widest">Issues Resolved</div>
+          <div className="space-y-12 relative z-10">
+            <div className="flex gap-12">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.6 }}
+              >
+                <div className="text-4xl font-serif text-white mb-1">{settings.issues_resolved || '0'}</div>
+                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Issues Resolved</div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.7 }}
+              >
+                <div className="text-4xl font-serif text-white mb-1">{settings.departments_count || '6'}</div>
+                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Departments</div>
+              </motion.div>
             </div>
-            <div>
-              <div className="text-3xl font-serif text-white">{settings.departments_count || '6'}</div>
-              <div className="text-[10px] text-white/40 uppercase tracking-widest">Departments</div>
-            </div>
+
+            {/* Footer Section */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+              className="pt-8 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6"
+            >
+              <div className="space-y-1">
+                <div className="text-white font-serif text-lg">Muhammad Faisal</div>
+                <div className="text-accent text-xs font-bold uppercase tracking-widest">Founder</div>
+                <div className="text-white/50 text-sm flex items-center gap-2">
+                  <Map size={14} /> Mozang The Heart of Lahore
+                </div>
+              </div>
+              <a 
+                href="https://facebook.com/Mozangpk" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group"
+              >
+                <Facebook size={18} className="text-white group-hover:text-accent transition-colors" />
+                <span className="text-white/80 text-sm font-medium">Facebook.com/Mozangpk</span>
+              </a>
+            </motion.div>
           </div>
         </div>
 
         {/* Login Form */}
-        <div className="w-full md:w-[460px] bg-paper flex items-center justify-center p-8 md:p-12">
-          <div className="w-full max-w-sm">
-            <h2 className="text-3xl font-serif mb-2">Sign in</h2>
-            <p className="text-muted text-sm mb-8">Choose your role to continue</p>
+        <div className="w-full md:w-[500px] bg-paper flex items-center justify-center p-8 md:p-16 relative">
+          <div className="w-full max-w-sm relative z-10">
+            <div className="mb-12">
+              <h2 className="text-4xl font-serif mb-3 text-ink">Sign in</h2>
+              <p className="text-muted text-lg">Access the community portal</p>
+            </div>
             
-            <div className="flex gap-1 bg-cream p-1 rounded-xl mb-8">
+            <div className="flex gap-1 bg-cream p-1.5 rounded-2xl mb-10 shadow-inner">
               {(['resident', 'officer', 'admin'] as Role[]).map(r => (
                 <button
                   key={r}
                   onClick={() => {
                     setLoginRole(r);
                   }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${loginRole === r ? 'bg-white text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                  className={`flex-1 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${loginRole === r ? 'bg-white text-ink shadow-lg' : 'text-muted hover:text-ink'}`}
                 >
-                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                  {r}
                 </button>
               ))}
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide">Email Address</label>
-                <input 
-                  type="email" 
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-border rounded-lg outline-none focus:border-accent transition-colors"
-                  placeholder="you@example.com"
-                />
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted px-1">Email Address</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
+                  <input 
+                    type="email" 
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-white border border-border rounded-2xl outline-none focus:border-accent transition-all shadow-sm focus:shadow-lg focus:shadow-accent/5"
+                    placeholder="you@example.com"
+                  />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold tracking-wide">Password</label>
-                <input 
-                  type="password" 
-                  value={loginPass}
-                  onChange={(e) => setLoginPass(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-border rounded-lg outline-none focus:border-accent transition-colors"
-                  placeholder="••••••••"
-                />
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted px-1">Password</label>
+                <div className="relative">
+                  <ShieldAlert className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
+                  <input 
+                    type="password" 
+                    value={loginPass}
+                    onChange={(e) => setLoginPass(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-white border border-border rounded-2xl outline-none focus:border-accent transition-all shadow-sm focus:shadow-lg focus:shadow-accent/5"
+                    placeholder="••••••••"
+                  />
+                </div>
               </div>
               
               <button 
                 onClick={handleLogin}
-                className="w-full py-3.5 bg-ink text-white rounded-lg font-semibold hover:bg-accent transition-all transform hover:-translate-y-0.5 mt-4 flex items-center justify-center gap-2"
+                className="w-full py-4 bg-ink text-white rounded-2xl font-bold uppercase tracking-widest hover:bg-accent transition-all transform hover:-translate-y-1 mt-6 flex items-center justify-center gap-3 shadow-xl shadow-ink/10 hover:shadow-accent/20"
               >
-                Sign In <ArrowRight size={18} />
+                Sign In <ArrowRight size={20} />
               </button>
+            </div>
+            
+            <div className="mt-12 text-center">
+              <p className="text-muted text-sm">Need help? Contact your local department.</p>
             </div>
           </div>
         </div>
@@ -757,7 +864,8 @@ function App() {
             complaint={selectedComplaint} 
             onClose={() => setSelectedComplaint(null)} 
             onUpdateStatus={updateStatus}
-            userRole={currentUser.role}
+            onAddComment={addComment}
+            user={currentUser}
             departments={departments}
           />
         )}
@@ -1596,9 +1704,21 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
   );
 }
 
-function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departments }: any) {
-  const canUpdate = userRole === 'officer' || userRole === 'admin';
+function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user, departments }: any) {
+  const userRole = user.role;
+  const canUpdate = userRole === 'admin' || (userRole === 'officer' && user.dept === complaint.category);
   const dept = departments.find((d: any) => d.id === complaint.category);
+  const [comment, setComment] = useState('');
+
+  // Sequential commenting logic: can only send if the last message wasn't from you
+  const lastEntry = complaint.timeline[complaint.timeline.length - 1];
+  const canComment = !lastEntry || lastEntry.authorId !== user.id;
+
+  const handleSendComment = () => {
+    if (!comment.trim()) return;
+    onAddComment(complaint.id, comment);
+    setComment('');
+  };
 
   return (
     <motion.div 
@@ -1662,20 +1782,51 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departme
           </div>
 
           <div className="space-y-4">
-            <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Timeline</div>
+            <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Timeline & Comments</div>
             <div className="space-y-4 pl-4 border-l-2 border-border">
               {complaint.timeline.map((t: any, i: number) => (
                 <div key={i} className="relative">
                   <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-accent border-2 border-paper" />
-                  <div className="text-[10px] font-mono text-muted mb-0.5">{t.time}</div>
+                  <div className="flex justify-between items-center mb-0.5">
+                    <div className="text-[10px] font-mono text-muted">{t.time}</div>
+                    {t.authorName && (
+                      <div className="text-[10px] font-bold text-accent uppercase tracking-widest">{t.authorName}</div>
+                    )}
+                  </div>
                   <div className="text-sm font-medium">{t.text}</div>
                 </div>
               ))}
             </div>
           </div>
+
+          {complaint.status !== 'resolved' && (
+            <div className="mt-8 space-y-3">
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Add Comment</div>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={canComment ? "Type your message..." : "Waiting for reply..."}
+                  disabled={!canComment}
+                  className="flex-1 px-4 py-2 bg-cream border border-border rounded-xl text-sm outline-none focus:border-accent disabled:opacity-50"
+                />
+                <button 
+                  onClick={handleSendComment}
+                  disabled={!canComment || !comment.trim()}
+                  className="px-4 py-2 bg-ink text-white rounded-xl text-xs font-bold hover:bg-accent transition-all disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+              {!canComment && (
+                <p className="text-[10px] text-accent font-medium italic">You must wait for a reply before sending another message.</p>
+              )}
+            </div>
+          )}
         </div>
 
-        {canUpdate && complaint.status !== 'resolved' && (
+        {canUpdate && (
           <div className="p-8 bg-cream border-t border-border">
             <h3 className="text-sm font-bold uppercase tracking-wider mb-4">Update Status</h3>
             <div className="flex flex-wrap gap-2">
