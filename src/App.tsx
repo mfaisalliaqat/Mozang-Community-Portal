@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LogOut, 
@@ -17,42 +17,73 @@ import {
   User as UserIcon, 
   Calendar,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  ShieldAlert
 } from 'lucide-react';
-import { User, Role, Complaint, Announcement, Status, Priority } from './types';
-import { DEPARTMENTS, DEPT_ICONS, STATUS_COLORS, PRIORITY_COLORS } from './constants';
+import { User, Role, Complaint, Announcement, Status, Priority, Department, Category } from './types';
+import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
-// --- SEED DATA ---
-const INITIAL_USERS: Record<string, User> = {
-  'resident@demo.com': { id: 'R001', name: 'Ahmed Khan', email: 'resident@demo.com', role: 'resident', avatar: 'AK', color: '#2a9968' },
-  'officer@demo.com': { id: 'O001', name: 'Capt. Raza', email: 'officer@demo.com', role: 'officer', avatar: 'CR', color: '#2a6bc8', dept: 'water', deptName: 'Water & Sewerage' },
-  'admin@demo.com': { id: 'A001', name: 'Director Shah', email: 'admin@demo.com', role: 'admin', avatar: 'DS', color: '#c8502a' },
-};
+// --- ERROR HANDLING ---
+function handleApiError(error: unknown) {
+  console.error('API Error: ', error);
+  const message = error instanceof Error ? error.message : String(error);
+  throw new Error(message);
+}
 
-const INITIAL_COMPLAINTS: Complaint[] = [
-  { id: 'CMP-001', title: 'Street light broken on Main Street', category: 'electricity', description: 'Three street lights have been non-functional for 2 weeks near the intersection of Main St and Park Ave. This is a safety hazard at night.', status: 'in-progress', priority: 'high', date: '2025-03-28', resident: 'Ahmed Khan', residentId: 'R001', area: 'Block 14, Gulberg', timeline: [{ time: '2025-03-28', text: 'Complaint submitted by resident' }, { time: '2025-03-29', text: 'Assigned to Electricity Dept.' }, { time: '2025-03-30', text: 'Technician visit scheduled' }] },
-  { id: 'CMP-002', title: 'Sewage overflow on Cavalry Ground road', category: 'water', description: 'Sewage water has been overflowing onto the road for 3 days. The smell is unbearable and it is a health hazard for the whole neighborhood.', status: 'pending', priority: 'high', date: '2025-03-29', resident: 'Sara Malik', residentId: 'R002', area: 'Cavalry Ground', timeline: [{ time: '2025-03-29', text: 'Complaint submitted by resident' }] },
-  { id: 'CMP-003', title: 'Large pothole causing accidents', category: 'roads', description: 'A massive pothole has developed on the main road near the school. Two motorcycles have already had accidents because of it.', status: 'pending', priority: 'medium', date: '2025-03-30', resident: 'Ahmed Khan', residentId: 'R001', area: 'Model Town Link Road', timeline: [{ time: '2025-03-30', text: 'Complaint submitted by resident' }] },
-  { id: 'CMP-004', title: 'Garbage not collected for 5 days', category: 'sanitation', description: 'The garbage collection truck has not come to our street for 5 consecutive days. Waste is piling up and stray dogs are creating a mess.', status: 'resolved', priority: 'medium', date: '2025-03-22', resident: 'Fatima Rizvi', residentId: 'R003', area: 'DHA Phase 5', timeline: [{ time: '2025-03-22', text: 'Complaint submitted' }, { time: '2025-03-23', text: 'Assigned to Sanitation Dept.' }, { time: '2025-03-25', text: 'Collection resumed' }, { time: '2025-03-25', text: 'Marked as Resolved' }] },
-  { id: 'CMP-005', title: 'Park swings broken, children at risk', category: 'parks', description: 'The swings in Al-Hamra Park are severely damaged. Two children got hurt last week. Urgent repair is needed.', status: 'in-progress', priority: 'medium', date: '2025-03-27', resident: 'Umar Siddiqui', residentId: 'R004', area: 'Al-Hamra Park', timeline: [{ time: '2025-03-27', text: 'Complaint submitted' }, { time: '2025-03-28', text: 'Parks team dispatched for inspection' }] },
-  { id: 'CMP-006', title: 'Power outage every evening for a week', category: 'electricity', description: 'We are facing load shedding every single evening from 6pm to 10pm despite being on an exempted feeder. This is causing huge losses for businesses.', status: 'resolved', priority: 'high', date: '2025-03-20', resident: 'Sara Malik', residentId: 'R002', area: 'Johar Town', timeline: [{ time: '2025-03-20', text: 'Complaint submitted' }, { time: '2025-03-21', text: 'Investigation started' }, { time: '2025-03-23', text: 'Faulty transformer replaced' }, { time: '2025-03-24', text: 'Issue resolved' }] },
-  { id: 'CMP-007', title: 'Noise pollution from illegal construction at night', category: 'safety', description: 'A construction site next to our apartment complex is running heavy machinery all night violating noise regulations.', status: 'pending', priority: 'low', date: '2025-03-31', resident: 'Fatima Rizvi', residentId: 'R003', area: 'Shadman Colony', timeline: [{ time: '2025-03-31', text: 'Complaint submitted' }] },
-];
+class ErrorBoundary extends React.Component<{ children: ReactNode }, { hasError: boolean, errorInfo: string | null }> {
+  state = { hasError: false, errorInfo: null };
 
-const INITIAL_ANNOUNCEMENTS: Announcement[] = [
-  { id: '1', tag: 'Notice', title: 'Scheduled Water Maintenance — April 3rd', text: 'Water supply will be interrupted in Zone A & B from 8AM–2PM for pipeline maintenance.', date: '2025-03-31' },
-  { id: '2', tag: 'Update', title: 'New Road Repair Drive Launched', text: '50+ roads across the city to be repaired under the Urban Development Initiative.', date: '2025-03-30' },
-];
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorInfo: error.message };
+  }
 
-export default function App() {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-paper flex items-center justify-center p-8">
+          <div className="max-w-md w-full bg-white border border-border rounded-3xl p-8 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldAlert size={32} />
+            </div>
+            <h2 className="text-2xl font-serif mb-4">Application Error</h2>
+            <p className="text-muted mb-8 text-sm leading-relaxed">{this.state.errorInfo || "Something went wrong."}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-ink text-white rounded-xl font-bold hover:bg-accent transition-all"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
+}
+
+export default function AppWrapper() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loginEmail, setLoginEmail] = useState('resident@demo.com');
-  const [loginPass, setLoginPass] = useState('pass');
-  const [loginRole, setLoginRole] = useState<Role>('resident');
-  const [loginDept, setLoginDept] = useState('water');
+  const [loginEmail, setLoginEmail] = useState('admin@mozang.com');
+  const [loginPass, setLoginPass] = useState('admin');
+  const [loginRole, setLoginRole] = useState<Role>('admin');
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [complaints, setComplaints] = useState<Complaint[]>(INITIAL_COMPLAINTS);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -63,16 +94,55 @@ export default function App() {
   const [newArea, setNewArea] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
-  // Announcement form
+  // User Management
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userPass, setUserPass] = useState('');
+  const [userRole, setUserRole] = useState<Role>('resident');
+  const [userDept, setUserDept] = useState('');
+
+  // Dept Management
+  const [deptName, setDeptName] = useState('');
+  const [deptIcon, setDeptIcon] = useState('🏢');
+
+  // Announcement Management
+  const [annTag, setAnnTag] = useState<'Notice' | 'Update' | 'Alert' | 'Event'>('Notice');
   const [annTitle, setAnnTitle] = useState('');
   const [annBody, setAnnBody] = useState('');
-  const [annTag, setAnnTag] = useState('Notice');
 
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('');
-  const [deptFilter, setDeptFilter] = useState<string>('');
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // --- DATA FETCHING ---
+  const fetchData = async () => {
+    try {
+      const [usersRes, deptsRes, complaintsRes, annRes] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/departments'),
+        fetch('/api/complaints'),
+        fetch('/api/announcements')
+      ]);
+
+      const [uList, dList, cList, aList] = await Promise.all([
+        usersRes.json(),
+        deptsRes.json(),
+        complaintsRes.json(),
+        annRes.json()
+      ]);
+
+      setUsers(uList);
+      setDepartments(dList);
+      setComplaints(cList);
+      setAnnouncements(aList);
+
+      if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -80,38 +150,111 @@ export default function App() {
   };
 
   const handleLogin = () => {
-    const u = INITIAL_USERS[loginEmail];
-    if (!u || loginPass !== 'pass') {
-      showToast('Invalid credentials. Use demo info.');
+    const u = users.find(u => u.email === loginEmail && u.password === loginPass);
+    if (!u) {
+      showToast('Invalid credentials.');
       return;
     }
     if (u.role !== loginRole) {
-      showToast('Role mismatch. Select the correct tab.');
+      showToast('Role mismatch.');
       return;
     }
     
-    let user = { ...u };
-    if (u.role === 'officer') {
-      user.dept = loginDept;
-      user.deptName = DEPARTMENTS[loginDept];
-    }
-    
-    setCurrentUser(user);
+    setCurrentUser(u);
     setCurrentPage('dashboard');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setLoginEmail('resident@demo.com');
-    setLoginRole('resident');
+    setLoginEmail('');
+    setLoginPass('');
   };
 
-  const submitComplaint = () => {
+  const addUser = async () => {
+    if (!userName || !userEmail || !userPass) {
+      showToast('Fill all fields');
+      return;
+    }
+    const id = String(Date.now());
+    const newUser: User = {
+      id,
+      name: userName,
+      email: userEmail,
+      password: userPass,
+      role: userRole,
+      dept: userRole === 'officer' ? userDept : undefined,
+      deptName: userRole === 'officer' ? departments.find(d => d.id === userDept)?.name : undefined,
+      avatar: userName.split(' ').map(n => n[0]).join('').toUpperCase(),
+      color: '#' + Math.floor(Math.random()*16777215).toString(16)
+    };
+    
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+      if (!res.ok) throw new Error('Failed to create user');
+      showToast('User created');
+      setUserName(''); setUserEmail(''); setUserPass('');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteUser = async (id: string) => {
+    if (id === 'A001') return;
+    try {
+      const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete user');
+      showToast('User deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const addDept = async () => {
+    if (!deptName) return;
+    const id = deptName.toLowerCase().replace(/\s+/g, '-');
+    const newDept: Department = {
+      id,
+      name: deptName,
+      icon: deptIcon
+    };
+    try {
+      const res = await fetch('/api/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDept)
+      });
+      if (!res.ok) throw new Error('Failed to add department');
+      setDeptName('');
+      showToast('Department added');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteDept = async (id: string) => {
+    try {
+      const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete department');
+      showToast('Department deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const submitComplaint = async () => {
     if (!newTitle || !newArea || !newDesc) {
       showToast('Please fill in all required fields.');
       return;
     }
-    const id = `CMP-${String(complaints.length + 1).padStart(3, '0')}`;
+    const id = `CMP-${String(Date.now()).slice(-6)}`;
     const today = new Date().toISOString().split('T')[0];
     const newComplaint: Complaint = {
       id,
@@ -126,16 +269,27 @@ export default function App() {
       area: newArea,
       timeline: [{ time: today, text: 'Complaint submitted by resident' }]
     };
-    setComplaints([newComplaint, ...complaints]);
-    showToast(`Complaint ${id} submitted successfully!`);
-    setCurrentPage('my-complaints');
-    // Reset form
-    setNewTitle('');
-    setNewArea('');
-    setNewDesc('');
+    
+    try {
+      const res = await fetch('/api/complaints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newComplaint)
+      });
+      if (!res.ok) throw new Error('Failed to submit complaint');
+      showToast(`Complaint ${id} submitted successfully!`);
+      setCurrentPage('my-complaints');
+      // Reset form
+      setNewTitle('');
+      setNewArea('');
+      setNewDesc('');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
   };
 
-  const updateStatus = (id: string, status: Status) => {
+  const updateStatus = async (id: string, status: Status) => {
     const today = new Date().toISOString().split('T')[0];
     const msgs: Record<Status, string> = {
       pending: 'Moved back to pending',
@@ -144,42 +298,66 @@ export default function App() {
       rejected: 'Complaint rejected by admin'
     };
     
-    setComplaints(prev => prev.map(c => {
-      if (c.id === id) {
-        return {
-          ...c,
+    const complaint = complaints.find(c => c.id === id);
+    if (!complaint) return;
+
+    try {
+      const res = await fetch(`/api/complaints/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status,
-          timeline: [...c.timeline, { time: today, text: msgs[status] }]
-        };
-      }
-      return c;
-    }));
-    
-    showToast(`Status updated to ${status}`);
-    setSelectedComplaint(null);
+          timelineEntry: { time: today, text: msgs[status] }
+        })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      showToast(`Status updated to ${status}`);
+      setSelectedComplaint(null);
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
   };
 
-  const postAnnouncement = () => {
+  const postAnnouncement = async () => {
     if (!annTitle || !annBody) {
       showToast('Please fill in all fields.');
       return;
     }
+    const id = String(Date.now());
     const newAnn: Announcement = {
-      id: String(Date.now()),
+      id,
       tag: annTag,
       title: annTitle,
       text: annBody,
       date: new Date().toISOString().split('T')[0]
     };
-    setAnnouncements([newAnn, ...announcements]);
-    showToast('Announcement posted!');
-    setAnnTitle('');
-    setAnnBody('');
+    
+    try {
+      const res = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAnn)
+      });
+      if (!res.ok) throw new Error('Failed to post announcement');
+      showToast('Announcement posted!');
+      setAnnTitle('');
+      setAnnBody('');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
   };
 
-  const deleteAnnouncement = (id: string) => {
-    setAnnouncements(prev => prev.filter(a => a.id !== id));
-    showToast('Announcement removed.');
+  const deleteAnnouncement = async (id: string) => {
+    try {
+      const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete announcement');
+      showToast('Announcement removed.');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
   };
 
   // --- RENDER HELPERS ---
@@ -231,7 +409,6 @@ export default function App() {
                   key={r}
                   onClick={() => {
                     setLoginRole(r);
-                    setLoginEmail(`${r}@demo.com`);
                   }}
                   className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${loginRole === r ? 'bg-white text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
                 >
@@ -262,36 +439,12 @@ export default function App() {
                 />
               </div>
               
-              {loginRole === 'officer' && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold tracking-wide">Department</label>
-                  <select 
-                    value={loginDept}
-                    onChange={(e) => setLoginDept(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-border rounded-lg outline-none focus:border-accent transition-colors"
-                  >
-                    {Object.entries(DEPARTMENTS).map(([id, name]) => (
-                      <option key={id} value={id}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <button 
                 onClick={handleLogin}
                 className="w-full py-3.5 bg-ink text-white rounded-lg font-semibold hover:bg-accent transition-all transform hover:-translate-y-0.5 mt-4 flex items-center justify-center gap-2"
               >
                 Sign In <ArrowRight size={18} />
               </button>
-            </div>
-
-            <div className="mt-8 p-4 bg-cream rounded-xl">
-              <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2">🔑 Demo credentials</p>
-              <div className="text-xs font-mono text-ink leading-relaxed">
-                resident@demo.com / pass<br />
-                officer@demo.com / pass<br />
-                admin@demo.com / pass
-              </div>
             </div>
           </div>
         </div>
@@ -393,8 +546,20 @@ export default function App() {
                       count={complaints.filter(c => c.status === 'pending').length}
                     />
                     <SidebarItem 
+                      icon={<UserIcon size={18} />} 
+                      label="Manage Users" 
+                      active={currentPage === 'manage-users'} 
+                      onClick={() => setCurrentPage('manage-users')} 
+                    />
+                    <SidebarItem 
                       icon={<Building2 size={18} />} 
-                      label="Departments" 
+                      label="Manage Departments" 
+                      active={currentPage === 'manage-departments'} 
+                      onClick={() => setCurrentPage('manage-departments')} 
+                    />
+                    <SidebarItem 
+                      icon={<LayoutDashboard size={18} />} 
+                      label="Departments Overview" 
                       active={currentPage === 'departments'} 
                       onClick={() => setCurrentPage('departments')} 
                     />
@@ -434,6 +599,7 @@ export default function App() {
                   announcements={announcements} 
                   onNavigate={setCurrentPage}
                   onSelectComplaint={setSelectedComplaint}
+                  departments={departments}
                 />
               )}
               {currentPage === 'submit' && (
@@ -445,6 +611,7 @@ export default function App() {
                   newDesc={newDesc} setNewDesc={setNewDesc}
                   onSubmit={submitComplaint}
                   onCancel={() => setCurrentPage('dashboard')}
+                  departments={departments}
                 />
               )}
               {currentPage === 'my-complaints' && (
@@ -452,6 +619,7 @@ export default function App() {
                   title="My Complaints" 
                   list={getMyComplaints()} 
                   onSelect={setSelectedComplaint}
+                  departments={departments}
                 />
               )}
               {currentPage === 'dept-complaints' && (
@@ -459,6 +627,7 @@ export default function App() {
                   title="Assigned Complaints" 
                   list={getDeptComplaints().filter(c => c.status !== 'resolved')} 
                   onSelect={setSelectedComplaint}
+                  departments={departments}
                 />
               )}
               {currentPage === 'resolved' && (
@@ -466,6 +635,7 @@ export default function App() {
                   title="Resolved Complaints" 
                   list={getDeptComplaints().filter(c => c.status === 'resolved')} 
                   onSelect={setSelectedComplaint}
+                  departments={departments}
                 />
               )}
               {currentPage === 'all-complaints' && (
@@ -474,10 +644,37 @@ export default function App() {
                   list={complaints} 
                   onSelect={setSelectedComplaint}
                   showFilters
+                  departments={departments}
+                />
+              )}
+              {currentPage === 'manage-users' && (
+                <AdminUsersView 
+                  users={users}
+                  userName={userName} setUserName={setUserName}
+                  userEmail={userEmail} setUserEmail={setUserEmail}
+                  userPass={userPass} setUserPass={setUserPass}
+                  userRole={userRole} setUserRole={setUserRole}
+                  userDept={userDept} setUserDept={setUserDept}
+                  departments={departments}
+                  onAdd={addUser}
+                  onDelete={deleteUser}
                 />
               )}
               {currentPage === 'departments' && (
-                <DepartmentsView complaints={complaints} />
+                <DepartmentsView 
+                  complaints={complaints}
+                  departments={departments}
+                />
+              )}
+              {currentPage === 'manage-departments' && (
+                <AdminDeptsView 
+                  departments={departments}
+                  deptName={deptName} setDeptName={setDeptName}
+                  deptIcon={deptIcon} setDeptIcon={setDeptIcon}
+                  onAdd={addDept}
+                  onDelete={deleteDept}
+                  complaints={complaints}
+                />
               )}
               {currentPage === 'announcements' && (
                 <AnnouncementsView 
@@ -507,6 +704,7 @@ export default function App() {
             onClose={() => setSelectedComplaint(null)} 
             onUpdateStatus={updateStatus}
             userRole={currentUser.role}
+            departments={departments}
           />
         )}
       </AnimatePresence>
@@ -550,7 +748,7 @@ function SidebarItem({ icon, label, active, onClick, count }: { icon: React.Reac
   );
 }
 
-function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint }: any) {
+function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments }: any) {
   const r = user.role;
   
   if (r === 'resident') {
@@ -589,7 +787,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
                 </div>
               ) : (
                 mine.slice(0, 4).map((c: any) => (
-                  <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} />
+                  <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
                 ))
               )}
             </div>
@@ -614,10 +812,11 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
 
   if (r === 'officer') {
     const deptComplaints = complaints.filter((c: any) => c.category === user.dept);
+    const deptIcon = departments.find((d: any) => d.id === user.dept)?.icon || '🏢';
     return (
       <div className="space-y-8">
         <div className="page-header">
-          <h1 className="text-4xl font-serif">{DEPT_ICONS[user.dept]} {user.deptName}</h1>
+          <h1 className="text-4xl font-serif">{deptIcon} {user.deptName}</h1>
           <p className="text-muted mt-1">Officer Panel — Welcome, {user.name}</p>
         </div>
 
@@ -639,7 +838,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               </div>
             ) : (
               deptComplaints.filter((c: any) => c.status !== 'resolved').map((c: any) => (
-                <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} />
+                <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
           </div>
@@ -667,14 +866,14 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
         <div className="bg-white border border-border rounded-2xl p-8">
           <h3 className="text-lg font-semibold mb-6">Department Breakdown</h3>
           <div className="space-y-6">
-            {Object.entries(DEPARTMENTS).map(([id, name]) => {
-              const all = complaints.filter(c => c.category === id);
-              const res = all.filter(c => c.status === 'resolved');
+            {departments.map((d: any) => {
+              const all = complaints.filter((c: any) => c.category === d.id);
+              const res = all.filter((c: any) => c.status === 'resolved');
               const pct = all.length === 0 ? 0 : Math.round((res.length / all.length) * 100);
               return (
-                <div key={id} className="space-y-2">
+                <div key={d.id} className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="font-medium flex items-center gap-2">{DEPT_ICONS[id]} {name}</span>
+                    <span className="font-medium flex items-center gap-2">{d.icon} {d.name}</span>
                     <span className="text-muted">{res.length}/{all.length} resolved</span>
                   </div>
                   <div className="h-2 bg-cream rounded-full overflow-hidden">
@@ -732,7 +931,8 @@ function StatCard({ label, value, color, sub }: any) {
   );
 }
 
-function ComplaintCard({ complaint, onClick }: { complaint: Complaint, onClick: () => void, key?: string }) {
+function ComplaintCard({ complaint, onClick, departments }: { complaint: Complaint, onClick: () => void, departments: Department[], key?: string }) {
+  const dept = departments.find(d => d.id === complaint.category);
   return (
     <motion.div 
       whileHover={{ scale: 1.01 }}
@@ -744,7 +944,7 @@ function ComplaintCard({ complaint, onClick }: { complaint: Complaint, onClick: 
       <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-ink truncate mb-1">{complaint.title}</h4>
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-medium text-muted uppercase tracking-wide">
-          <span className="flex items-center gap-1">{DEPT_ICONS[complaint.category]} {DEPARTMENTS[complaint.category]}</span>
+          <span className="flex items-center gap-1">{dept?.icon || '🏢'} {dept?.name || complaint.category}</span>
           <span className="flex items-center gap-1"><MapPin size={12} /> {complaint.area}</span>
           <span className="flex items-center gap-1"><UserIcon size={12} /> {complaint.resident}</span>
           <span className="flex items-center gap-1"><Calendar size={12} /> {complaint.date}</span>
@@ -766,7 +966,8 @@ function SubmitForm({
   newPriority, setNewPriority, 
   newArea, setNewArea, 
   newDesc, setNewDesc, 
-  onSubmit, onCancel 
+  onSubmit, onCancel,
+  departments
 }: any) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -794,8 +995,8 @@ function SubmitForm({
               onChange={(e) => setNewCategory(e.target.value)}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             >
-              {Object.entries(DEPARTMENTS).map(([id, name]) => (
-                <option key={id} value={id}>{DEPT_ICONS[id]} {name}</option>
+              {departments.map((d: any) => (
+                <option key={d.id} value={d.id}>{d.icon} {d.name}</option>
               ))}
             </select>
           </div>
@@ -851,7 +1052,7 @@ function SubmitForm({
   );
 }
 
-function ComplaintsList({ title, list, onSelect, showFilters }: any) {
+function ComplaintsList({ title, list, onSelect, showFilters, departments }: any) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [dept, setDept] = useState('');
@@ -898,8 +1099,8 @@ function ComplaintsList({ title, list, onSelect, showFilters }: any) {
             className="px-4 py-3 bg-white border border-border rounded-xl outline-none focus:border-accent transition-colors text-sm font-medium"
           >
             <option value="">All Departments</option>
-            {Object.entries(DEPARTMENTS).map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
+            {departments.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         )}
@@ -914,7 +1115,7 @@ function ComplaintsList({ title, list, onSelect, showFilters }: any) {
           </div>
         ) : (
           filtered.map((c: any) => (
-            <ComplaintCard key={c.id} complaint={c} onClick={() => onSelect(c)} />
+            <ComplaintCard key={c.id} complaint={c} onClick={() => onSelect(c)} departments={departments} />
           ))
         )}
       </div>
@@ -922,7 +1123,7 @@ function ComplaintsList({ title, list, onSelect, showFilters }: any) {
   );
 }
 
-function DepartmentsView({ complaints }: any) {
+function DepartmentsView({ complaints, departments }: any) {
   return (
     <div className="space-y-8">
       <div className="page-header">
@@ -931,19 +1132,19 @@ function DepartmentsView({ complaints }: any) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Object.entries(DEPARTMENTS).map(([id, name]) => {
-          const all = complaints.filter((c: any) => c.category === id);
+        {departments.map((d: any) => {
+          const all = complaints.filter((c: any) => c.category === d.id);
           const pend = all.filter((c: any) => c.status === 'pending').length;
           const inP = all.filter((c: any) => c.status === 'in-progress').length;
           const res = all.filter((c: any) => c.status === 'resolved').length;
           return (
-            <div key={id} className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
-                  {DEPT_ICONS[id]}
+                  {d.icon}
                 </div>
                 <div>
-                  <h3 className="font-bold text-ink">{name}</h3>
+                  <h3 className="font-bold text-ink">{d.name}</h3>
                   <p className="text-xs text-muted font-medium uppercase tracking-wider">{all.length} total complaints</p>
                 </div>
               </div>
@@ -961,6 +1162,228 @@ function DepartmentsView({ complaints }: any) {
                   <div className="text-xl font-serif text-green">{res}</div>
                   <div className="text-[9px] font-bold text-green uppercase tracking-widest">Resolved</div>
                 </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AdminUsersView({ 
+  users, 
+  userName, setUserName, 
+  userEmail, setUserEmail, 
+  userPass, setUserPass, 
+  userRole, setUserRole, 
+  userDept, setUserDept, 
+  departments, 
+  onAdd, 
+  onDelete 
+}: any) {
+  return (
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Manage Users</h1>
+        <p className="text-muted mt-1">Create and manage resident and officer accounts.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+        <h3 className="font-bold">Add New User</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Full Name</label>
+            <input 
+              type="text" 
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="John Doe"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Email Address</label>
+            <input 
+              type="email" 
+              value={userEmail}
+              onChange={(e) => setUserEmail(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="john@example.com"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Initial Password</label>
+            <input 
+              type="text" 
+              value={userPass}
+              onChange={(e) => setUserPass(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="••••••••"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">User Role</label>
+            <select 
+              value={userRole}
+              onChange={(e) => setUserRole(e.target.value as Role)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            >
+              <option value="resident">Resident</option>
+              <option value="officer">Officer</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          {userRole === 'officer' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold tracking-wide">Assign Department</label>
+              <select 
+                value={userDept}
+                onChange={(e) => setUserDept(e.target.value)}
+                className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              >
+                <option value="">Select Department</option>
+                {departments.map((d: any) => (
+                  <option key={d.id} value={d.id}>{d.icon} {d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex items-end">
+            <button 
+              onClick={onAdd}
+              className="w-full py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+            >
+              Create User
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl overflow-hidden shadow-sm">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-cream border-bottom border-border">
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">User</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Role</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Department</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {users.map((u: any) => (
+              <tr key={u.id} className="hover:bg-cream/50 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                      style={{ backgroundColor: u.color }}
+                    >
+                      {u.avatar}
+                    </div>
+                    <div>
+                      <div className="font-medium text-ink">{u.name}</div>
+                      <div className="text-xs text-muted">{u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                    u.role === 'resident' ? 'bg-green/10 text-green' :
+                    u.role === 'officer' ? 'bg-accent2/10 text-accent2' :
+                    'bg-accent/10 text-accent'
+                  }`}>
+                    {u.role}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-muted">
+                  {u.deptName || '-'}
+                </td>
+                <td className="px-6 py-4">
+                  {u.id !== 'A001' && (
+                    <button 
+                      onClick={() => onDelete(u.id)}
+                      className="p-2 text-muted hover:text-rose-500 transition-colors"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminDeptsView({ 
+  departments, 
+  deptName, setDeptName, 
+  deptIcon, setDeptIcon, 
+  onAdd, 
+  onDelete, 
+  complaints 
+}: any) {
+  return (
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Manage Departments</h1>
+        <p className="text-muted mt-1">Configure the departments that handle community complaints.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+        <h3 className="font-bold">Add New Department</h3>
+        <div className="flex flex-wrap gap-6 items-end">
+          <div className="space-y-1.5 flex-1 min-w-[200px]">
+            <label className="text-xs font-semibold tracking-wide">Department Name</label>
+            <input 
+              type="text" 
+              value={deptName}
+              onChange={(e) => setDeptName(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="e.g. Waste Management"
+            />
+          </div>
+          <div className="space-y-1.5 w-32">
+            <label className="text-xs font-semibold tracking-wide">Icon (Emoji)</label>
+            <input 
+              type="text" 
+              value={deptIcon}
+              onChange={(e) => setDeptIcon(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors text-center text-xl"
+            />
+          </div>
+          <button 
+            onClick={onAdd}
+            className="px-8 py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+          >
+            Add Department
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {departments.map((d: any) => {
+          const count = complaints.filter((c: any) => c.category === d.id).length;
+          return (
+            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
+                  {d.icon}
+                </div>
+                <button 
+                  onClick={() => onDelete(d.id)}
+                  className="p-2 text-muted hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <h3 className="font-bold text-ink mb-1">{d.name}</h3>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">{count} complaints</span>
+                <span className="text-[10px] font-mono text-muted bg-cream px-2 py-0.5 rounded">{d.id}</span>
               </div>
             </div>
           );
@@ -1076,8 +1499,9 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
   );
 }
 
-function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole }: any) {
+function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departments }: any) {
   const canUpdate = userRole === 'officer' || userRole === 'admin';
+  const dept = departments.find((d: any) => d.id === complaint.category);
 
   return (
     <motion.div 
@@ -1110,7 +1534,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole }: any) {
               {complaint.status.replace('-', ' ')}
             </span>
             <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
-              {DEPT_ICONS[complaint.category]} {DEPARTMENTS[complaint.category]}
+              {dept?.icon || '🏢'} {dept?.name || complaint.category}
             </span>
             <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
               {complaint.priority} priority

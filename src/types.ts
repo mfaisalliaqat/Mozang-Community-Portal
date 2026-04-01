@@ -8,11 +8,24 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string; // For this prototype
   role: Role;
   avatar: string;
   color: string;
   dept?: string;
   deptName?: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  deptId: string;
 }
 
 export interface Complaint {

@@ -1,23 +1,5 @@
 import { Priority, Status } from './types';
 
-export const DEPARTMENTS: Record<string, string> = {
-  water: 'Water & Sewerage',
-  sanitation: 'Sanitation',
-  roads: 'Roads & Infrastructure',
-  electricity: 'Electricity',
-  parks: 'Parks & Recreation',
-  safety: 'Public Safety',
-};
-
-export const DEPT_ICONS: Record<string, string> = {
-  water: '💧',
-  sanitation: '🗑️',
-  roads: '🛣️',
-  electricity: '⚡',
-  parks: '🌳',
-  safety: '🛡️',
-};
-
 export const STATUS_COLORS: Record<Status, string> = {
   pending: 'bg-orange-100 text-orange-700',
   'in-progress': 'bg-blue-100 text-blue-700',
