@@ -30,7 +30,6 @@ export interface Category {
 
 export interface Complaint {
   id: string;
-  title: string;
   category: string;
   description: string;
   status: Status;
@@ -38,7 +37,8 @@ export interface Complaint {
   date: string;
   resident: string;
   residentId: string;
-  area: string;
+  address: string;
+  contact: string;
   timeline: TimelineItem[];
 }
 

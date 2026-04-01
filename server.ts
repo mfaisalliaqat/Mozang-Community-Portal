@@ -40,7 +40,6 @@ try {
 
     CREATE TABLE IF NOT EXISTS complaints (
       id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
       category TEXT NOT NULL,
       description TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -48,7 +47,8 @@ try {
       date TEXT NOT NULL,
       resident TEXT NOT NULL,
       residentId TEXT NOT NULL,
-      area TEXT NOT NULL
+      address TEXT NOT NULL,
+      contact TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS timeline (
@@ -206,13 +206,13 @@ async function startServer() {
   });
 
   app.post("/api/complaints", (req, res) => {
-    const { id, title, category, description, status, priority, date, resident, residentId, area, timeline } = req.body;
+    const { id, category, description, status, priority, date, resident, residentId, address, contact, timeline } = req.body;
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
-          INSERT INTO complaints (id, title, category, description, status, priority, date, resident, residentId, area)
+          INSERT INTO complaints (id, category, description, status, priority, date, resident, residentId, address, contact)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, title, category, description, status, priority, date, resident, residentId, area);
+        `).run(id, category, description, status, priority, date, resident, residentId, address, contact);
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text) VALUES (?, ?, ?)");
         for (const t of timeline) {

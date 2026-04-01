@@ -18,7 +18,8 @@ import {
   Calendar,
   ChevronRight,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Phone
 } from 'lucide-react';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
@@ -88,10 +89,10 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
 
   // Form states
-  const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('water');
   const [newPriority, setNewPriority] = useState<Priority>('medium');
-  const [newArea, setNewArea] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
   // User Management
@@ -275,7 +276,7 @@ function App() {
   };
 
   const submitComplaint = async () => {
-    if (!newTitle || !newArea || !newDesc) {
+    if (!newAddress || !newContact || !newDesc) {
       showToast('Please fill in all required fields.');
       return;
     }
@@ -283,7 +284,6 @@ function App() {
     const today = new Date().toISOString().split('T')[0];
     const newComplaint: Complaint = {
       id,
-      title: newTitle,
       category: newCategory,
       description: newDesc,
       status: 'pending',
@@ -291,7 +291,8 @@ function App() {
       date: today,
       resident: currentUser?.name || 'Unknown',
       residentId: currentUser?.id || 'Unknown',
-      area: newArea,
+      address: newAddress,
+      contact: newContact,
       timeline: [{ time: today, text: 'Complaint submitted by resident' }]
     };
     
@@ -305,8 +306,8 @@ function App() {
       showToast(`Complaint ${id} submitted successfully!`);
       setCurrentPage('my-complaints');
       // Reset form
-      setNewTitle('');
-      setNewArea('');
+      setNewAddress('');
+      setNewContact('');
       setNewDesc('');
       fetchData();
     } catch (e) {
@@ -398,7 +399,7 @@ function App() {
           <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/20 to-transparent"></div>
           
           <div className="text-2xl font-serif text-white relative z-10">
-            Civic<span className="text-accent">Connect</span>
+            Mozang <span className="text-accent">Community Portal</span>
           </div>
           
           <div className="relative z-10 max-w-lg">
@@ -408,16 +409,12 @@ function App() {
           
           <div className="flex gap-12 relative z-10 mt-12">
             <div>
-              <div className="text-3xl font-serif text-white">1,247</div>
+              <div className="text-3xl font-serif text-white">0</div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest">Issues Resolved</div>
             </div>
             <div>
               <div className="text-3xl font-serif text-white">6</div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest">Departments</div>
-            </div>
-            <div>
-              <div className="text-3xl font-serif text-white">92%</div>
-              <div className="text-[10px] text-white/40 uppercase tracking-widest">Satisfaction</div>
             </div>
           </div>
         </div>
@@ -482,7 +479,7 @@ function App() {
       {/* Top Nav */}
       <nav className="h-16 bg-ink px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="text-xl font-serif text-white">
-          Civic<span className="text-accent">Connect</span>
+          Mozang <span className="text-accent">Community Portal</span>
         </div>
         
         <div className="flex items-center gap-6">
@@ -629,10 +626,10 @@ function App() {
               )}
               {currentPage === 'submit' && (
                 <SubmitForm 
-                  newTitle={newTitle} setNewTitle={setNewTitle}
                   newCategory={newCategory} setNewCategory={setNewCategory}
                   newPriority={newPriority} setNewPriority={setNewPriority}
-                  newArea={newArea} setNewArea={setNewArea}
+                  newAddress={newAddress} setNewAddress={setNewAddress}
+                  newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
                   onSubmit={submitComplaint}
                   onCancel={() => setCurrentPage('dashboard')}
@@ -967,10 +964,10 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
     >
       <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${PRIORITY_COLORS[complaint.priority]}`} />
       <div className="flex-1 min-w-0">
-        <h4 className="font-semibold text-ink truncate mb-1">{complaint.title}</h4>
+        <h4 className="font-semibold text-ink truncate mb-1">{complaint.description.substring(0, 60)}...</h4>
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-medium text-muted uppercase tracking-wide">
           <span className="flex items-center gap-1">{dept?.icon || '🏢'} {dept?.name || complaint.category}</span>
-          <span className="flex items-center gap-1"><MapPin size={12} /> {complaint.area}</span>
+          <span className="flex items-center gap-1"><MapPin size={12} /> {complaint.address}</span>
           <span className="flex items-center gap-1"><UserIcon size={12} /> {complaint.resident}</span>
           <span className="flex items-center gap-1"><Calendar size={12} /> {complaint.date}</span>
         </div>
@@ -986,10 +983,10 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
 }
 
 function SubmitForm({ 
-  newTitle, setNewTitle, 
   newCategory, setNewCategory, 
   newPriority, setNewPriority, 
-  newArea, setNewArea, 
+  newAddress, setNewAddress, 
+  newContact, setNewContact,
   newDesc, setNewDesc, 
   onSubmit, onCancel,
   departments
@@ -1003,16 +1000,6 @@ function SubmitForm({
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Complaint Title *</label>
-            <input 
-              type="text" 
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-              placeholder="Brief description of the issue"
-            />
-          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Department / Category *</label>
             <select 
@@ -1038,13 +1025,26 @@ function SubmitForm({
             </select>
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Location / Area *</label>
+            <label className="text-xs font-semibold tracking-wide">Complete Address *</label>
+            <div className="relative">
+              <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
+              <input 
+                type="text" 
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+                placeholder="Enter your complete address"
+              />
+            </div>
+          </div>
+          <div className="md:col-span-2 space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Contact Number *</label>
             <input 
               type="text" 
-              value={newArea}
-              onChange={(e) => setNewArea(e.target.value)}
+              value={newContact}
+              onChange={(e) => setNewContact(e.target.value)}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-              placeholder="e.g. Block 5, Gulberg III"
+              placeholder="Enter your contact number"
             />
           </div>
           <div className="md:col-span-2 space-y-1.5">
@@ -1083,8 +1083,8 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments }: any
   const [dept, setDept] = useState('');
 
   const filtered = list.filter((c: any) => {
-    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
-                          c.description.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = c.description.toLowerCase().includes(search.toLowerCase()) || 
+                          c.address.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !status || c.status === status;
     const matchesDept = !dept || c.category === dept;
     return matchesSearch && matchesStatus && matchesDept;
@@ -1547,7 +1547,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departme
           <div className="flex justify-between items-start mb-6">
             <div>
               <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted">{complaint.id}</span>
-              <h2 className="text-3xl font-serif mt-2">{complaint.title}</h2>
+              <h2 className="text-3xl font-serif mt-2">{complaint.description.substring(0, 50)}...</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-cream rounded-full transition-colors">
               <X size={24} />
@@ -1566,7 +1566,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departme
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Submitted By</div>
               <div className="text-sm font-medium flex items-center gap-2"><UserIcon size={14} className="text-muted" /> {complaint.resident}</div>
@@ -1576,8 +1576,12 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departme
               <div className="text-sm font-medium flex items-center gap-2"><Calendar size={14} className="text-muted" /> {complaint.date}</div>
             </div>
             <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Area</div>
-              <div className="text-sm font-medium flex items-center gap-2"><MapPin size={14} className="text-muted" /> {complaint.area}</div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Address</div>
+              <div className="text-sm font-medium flex items-center gap-2"><MapPin size={14} className="text-muted" /> {complaint.address}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Contact</div>
+              <div className="text-sm font-medium flex items-center gap-2"><Phone size={14} className="text-muted" /> {complaint.contact}</div>
             </div>
           </div>
 
