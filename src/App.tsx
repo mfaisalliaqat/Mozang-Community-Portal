@@ -116,21 +116,36 @@ function App() {
   const fetchData = async () => {
     console.log('Fetching data from API...');
     try {
-      const [usersRes, deptsRes, complaintsRes, annRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/departments'),
-        fetch('/api/complaints'),
-        fetch('/api/announcements')
-      ]);
+      const endpoints = [
+        { name: 'users', url: '/api/users' },
+        { name: 'departments', url: '/api/departments' },
+        { name: 'complaints', url: '/api/complaints' },
+        { name: 'announcements', url: '/api/announcements' }
+      ];
 
-      const [uList, dList, cList, aList] = await Promise.all([
-        usersRes.json(),
-        deptsRes.json(),
-        complaintsRes.json(),
-        annRes.json()
-      ]);
+      const results = await Promise.all(endpoints.map(async (e) => {
+        const res = await fetch(e.url);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Failed to fetch ${e.name}: ${res.status} ${res.statusText}. Response: ${text.substring(0, 100)}`);
+        }
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await res.text();
+          throw new Error(`Expected JSON from ${e.name} but got ${contentType}. Response: ${text.substring(0, 100)}`);
+        }
+        return res.json();
+      }));
 
-      console.log('Data fetched successfully:', { users: uList.length, depts: dList.length });
+      const [uList, dList, cList, aList] = results;
+
+      console.log('Data fetched successfully:', {
+        users: uList.length,
+        depts: dList.length,
+        complaints: cList.length,
+        announcements: aList.length
+      });
+
       setUsers(uList);
       setDepartments(dList);
       setComplaints(cList);

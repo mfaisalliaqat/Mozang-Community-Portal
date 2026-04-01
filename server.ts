@@ -92,12 +92,25 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Logging middleware for API requests
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/api')) {
+      console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    }
+    next();
+  });
+
   // --- API ROUTES ---
 
   // Users
   app.get("/api/users", (req, res) => {
-    const users = db.prepare("SELECT * FROM users").all();
-    res.json(users);
+    try {
+      const users = db.prepare("SELECT * FROM users").all();
+      res.json(users);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/users", (req, res) => {
@@ -109,19 +122,30 @@ async function startServer() {
       `).run(id, name, email, password, role, dept, deptName, avatar, color);
       res.status(201).json({ success: true });
     } catch (error: any) {
+      console.error('Error creating user:', error);
       res.status(400).json({ error: error.message });
     }
   });
 
   app.delete("/api/users/:id", (req, res) => {
-    db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Departments
   app.get("/api/departments", (req, res) => {
-    const depts = db.prepare("SELECT * FROM departments").all();
-    res.json(depts);
+    try {
+      const depts = db.prepare("SELECT * FROM departments").all();
+      res.json(depts);
+    } catch (error: any) {
+      console.error('Error fetching departments:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/departments", (req, res) => {
@@ -130,26 +154,37 @@ async function startServer() {
       db.prepare("INSERT INTO departments (id, name, icon) VALUES (?, ?, ?)").run(id, name, icon);
       res.status(201).json({ success: true });
     } catch (error: any) {
+      console.error('Error creating department:', error);
       res.status(400).json({ error: error.message });
     }
   });
 
   app.delete("/api/departments/:id", (req, res) => {
-    db.prepare("DELETE FROM departments WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM departments WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting department:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Complaints
   app.get("/api/complaints", (req, res) => {
-    const complaints = db.prepare("SELECT * FROM complaints").all() as any[];
-    const timeline = db.prepare("SELECT * FROM timeline").all() as any[];
-    
-    const result = complaints.map(c => ({
-      ...c,
-      timeline: timeline.filter(t => t.complaintId === c.id).map(t => ({ time: t.time, text: t.text }))
-    }));
-    
-    res.json(result);
+    try {
+      const complaints = db.prepare("SELECT * FROM complaints").all() as any[];
+      const timeline = db.prepare("SELECT * FROM timeline").all() as any[];
+      
+      const result = complaints.map(c => ({
+        ...c,
+        timeline: timeline.filter(t => t.complaintId === c.id).map(t => ({ time: t.time, text: t.text }))
+      }));
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error fetching complaints:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/complaints", (req, res) => {
@@ -169,6 +204,7 @@ async function startServer() {
       insertComplaint();
       res.status(201).json({ success: true });
     } catch (error: any) {
+      console.error('Error creating complaint:', error);
       res.status(400).json({ error: error.message });
     }
   });
@@ -187,14 +223,20 @@ async function startServer() {
       update();
       res.json({ success: true });
     } catch (error: any) {
+      console.error('Error updating complaint:', error);
       res.status(400).json({ error: error.message });
     }
   });
 
   // Announcements
   app.get("/api/announcements", (req, res) => {
-    const announcements = db.prepare("SELECT * FROM announcements").all();
-    res.json(announcements);
+    try {
+      const announcements = db.prepare("SELECT * FROM announcements").all();
+      res.json(announcements);
+    } catch (error: any) {
+      console.error('Error fetching announcements:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post("/api/announcements", (req, res) => {
@@ -203,23 +245,36 @@ async function startServer() {
       db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)").run(id, tag, title, text, date);
       res.status(201).json({ success: true });
     } catch (error: any) {
+      console.error('Error creating announcement:', error);
       res.status(400).json({ error: error.message });
     }
   });
 
   app.delete("/api/announcements/:id", (req, res) => {
-    db.prepare("DELETE FROM announcements WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM announcements WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting announcement:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // API 404 handler
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
   });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    console.log('Starting in development mode with Vite middleware');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
+    console.log('Starting in production mode');
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
@@ -227,8 +282,14 @@ async function startServer() {
     });
   }
 
+  // Global error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Global server error:', err);
+    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
