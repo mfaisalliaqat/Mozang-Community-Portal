@@ -94,7 +94,6 @@ function App() {
 
   // Form states
   const [newCategory, setNewCategory] = useState('water');
-  const [newPriority, setNewPriority] = useState<Priority>('medium');
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -294,7 +293,7 @@ function App() {
       category: newCategory,
       description: newDesc,
       status: 'pending',
-      priority: newPriority,
+      priority: 'medium',
       date: today,
       resident: currentUser?.name || 'Unknown',
       residentId: currentUser?.id || 'Unknown',
@@ -655,7 +654,6 @@ function App() {
               {currentPage === 'submit' && (
                 <SubmitForm 
                   newCategory={newCategory} setNewCategory={setNewCategory}
-                  newPriority={newPriority} setNewPriority={setNewPriority}
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
@@ -1050,7 +1048,6 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
       onClick={onClick}
       className="bg-white border border-border rounded-2xl p-5 flex items-start gap-4 cursor-pointer hover:border-accent transition-all hover:shadow-lg"
     >
-      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${PRIORITY_COLORS[complaint.priority]}`} />
       <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-ink truncate mb-1">{complaint.description.substring(0, 60)}...</h4>
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-medium text-muted uppercase tracking-wide">
@@ -1072,7 +1069,6 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
 
 function SubmitForm({ 
   newCategory, setNewCategory, 
-  newPriority, setNewPriority, 
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newDesc, setNewDesc, 
@@ -1088,7 +1084,7 @@ function SubmitForm({
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1.5">
+          <div className="md:col-span-2 space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Department / Category *</label>
             <select 
               value={newCategory}
@@ -1098,18 +1094,6 @@ function SubmitForm({
               {departments.map((d: any) => (
                 <option key={d.id} value={d.id}>{d.icon} {d.name}</option>
               ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Priority</label>
-            <select 
-              value={newPriority}
-              onChange={(e) => setNewPriority(e.target.value as Priority)}
-              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-            >
-              <option value="low">🟢 Low</option>
-              <option value="medium">🟡 Medium</option>
-              <option value="high">🔴 High</option>
             </select>
           </div>
           <div className="md:col-span-2 space-y-1.5">
@@ -1648,9 +1632,6 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, userRole, departme
             </span>
             <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
               {dept?.icon || '🏢'} {dept?.name || complaint.category}
-            </span>
-            <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
-              {complaint.priority} priority
             </span>
           </div>
 
