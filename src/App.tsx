@@ -451,7 +451,13 @@ function App() {
       showToast('Please fill in all required fields.');
       return;
     }
-    const id = `CMP-${String(Date.now()).slice(-6)}`;
+    const nextId = complaints.length > 0 
+      ? Math.max(...complaints.map(c => {
+          const match = c.id.match(/CMP-(\d+)/);
+          return match ? parseInt(match[1]) : 0;
+        })) + 1 
+      : 1;
+    const id = `CMP-${nextId}`;
     const today = new Date().toISOString().split('T')[0];
     const newComplaint: Complaint = {
       id,
@@ -972,15 +978,19 @@ function App() {
             </div>
 
             <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Info</div>
-              <div className="space-y-1">
-                <SidebarItem 
-                  icon={<Megaphone size={18} />} 
-                  label="Announcements" 
-                  active={currentPage === (currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
-                  onClick={() => { setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements'); setShowMobileMenu(false); }} 
-                />
-              </div>
+              {currentUser.role !== 'officer' && (
+                <>
+                  <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Info</div>
+                  <div className="space-y-1">
+                    <SidebarItem 
+                      icon={<Megaphone size={18} />} 
+                      label="Announcements" 
+                      active={currentPage === (currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
+                      onClick={() => { setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements'); setShowMobileMenu(false); }} 
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </aside>
@@ -1320,18 +1330,20 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
             </div>
           </div>
 
-          <div className="space-y-6">
-            <h2 className="text-2xl font-serif">Latest Announcements</h2>
-            <div className="space-y-4">
-              {announcements.slice(0, 3).map((a: any) => (
-                <div key={a.id} className="bg-ink p-6 rounded-2xl text-white relative overflow-hidden">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-accent mb-2">{a.tag}</div>
-                  <h3 className="text-lg font-serif mb-2">{a.title}</h3>
-                  <p className="text-white/60 text-sm leading-relaxed">{a.text}</p>
-                </div>
-              ))}
+          {user.role === 'resident' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-serif">Latest Announcements</h2>
+              <div className="space-y-4">
+                {announcements.slice(0, 3).map((a: any) => (
+                  <div key={a.id} className="bg-ink p-6 rounded-2xl text-white relative overflow-hidden">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-accent mb-2">{a.tag}</div>
+                    <h3 className="text-lg font-serif mb-2">{a.title}</h3>
+                    <p className="text-white/60 text-sm leading-relaxed">{a.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -1491,30 +1503,97 @@ function StatCard({ label, value, color, sub }: any) {
   );
 }
 
-function ComplaintCard({ complaint, onClick, departments }: { complaint: Complaint, onClick: () => void, departments: Department[], key?: string }) {
+function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: { complaint: Complaint, onClick: () => void, departments: Department[], viewMode?: 'list' | 'card' | 'screenshot', key?: string }) {
   const dept = departments.find(d => d.id === complaint.category);
+  
+  if (viewMode === 'list') {
+    return (
+      <div 
+        onClick={onClick}
+        className="bg-white border border-border p-4 rounded-xl flex items-center justify-between hover:border-accent transition-all cursor-pointer group"
+      >
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded shrink-0">{complaint.id}</span>
+          <h3 className="text-sm font-medium truncate">{complaint.description}</h3>
+        </div>
+        <div className="flex items-center gap-6 shrink-0">
+          <span className="text-[10px] text-muted uppercase font-bold tracking-widest">{complaint.date}</span>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${STATUS_COLORS[complaint.status]}`}>
+            {complaint.status.replace('-', ' ')}
+          </span>
+          <ChevronRight size={14} className="text-muted group-hover:text-accent transition-colors" />
+        </div>
+      </div>
+    );
+  }
+
+  const isScreenshot = viewMode === 'screenshot';
+
   return (
     <motion.div 
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
       onClick={onClick}
-      className="bg-white border border-border rounded-2xl p-5 flex items-start gap-4 cursor-pointer hover:border-accent transition-all hover:shadow-lg"
+      className={`bg-white border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden ${isScreenshot ? 'border-2 border-ink' : ''}`}
     >
-      <div className="flex-1 min-w-0">
-        <h4 className="font-semibold text-ink truncate mb-1">{complaint.description.substring(0, 60)}...</h4>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-medium text-muted uppercase tracking-wide">
-          <span className="flex items-center gap-1">{dept?.name || complaint.category}</span>
-          <span className="flex items-center gap-1"><MapPin size={12} /> {complaint.address}</span>
-          <span className="flex items-center gap-1"><UserIcon size={12} /> {complaint.resident}</span>
-          <span className="flex items-center gap-1"><Calendar size={12} /> {complaint.date}</span>
+      {isScreenshot && (
+        <div className="absolute top-0 right-0 bg-ink text-white px-4 py-1 text-[10px] font-bold uppercase tracking-widest rounded-bl-xl">
+          Official Record
+        </div>
+      )}
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded w-fit">{complaint.id}</span>
+          <h3 className="text-lg font-serif group-hover:text-accent transition-colors line-clamp-1">{complaint.description}</h3>
+        </div>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span className={`text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${STATUS_COLORS[complaint.status]}`}>
+            {complaint.status.replace('-', ' ')}
+          </span>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${PRIORITY_COLORS[complaint.priority]}`}>
+            {complaint.priority} priority
+          </span>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-2 shrink-0">
-        <span className="font-mono text-[10px] bg-cream px-2 py-0.5 rounded text-muted">{complaint.id}</span>
-        <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${STATUS_COLORS[complaint.status]}`}>
-          {complaint.status.replace('-', ' ')}
-        </span>
+
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Calendar size={14} />
+          <span>{complaint.date}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Building2 size={14} />
+          <span>{dept?.name || complaint.category}</span>
+        </div>
       </div>
+
+      <div className="pt-4 border-t border-border space-y-3">
+        <div className="flex items-center gap-2 text-xs">
+          <MapPin size={14} className="text-muted" />
+          <span className="font-medium">{complaint.address}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <Phone size={14} className="text-muted" />
+          <span className="font-medium">{complaint.contact}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <UserIcon size={14} className="text-muted" />
+          <span className="font-medium">{complaint.resident}</span>
+        </div>
+        {isScreenshot && (
+          <div className="bg-cream p-4 rounded-xl text-sm leading-relaxed italic text-ink mt-2">
+            {complaint.description}
+          </div>
+        )}
+      </div>
+
+      {!isScreenshot && (
+        <div className="mt-4 flex justify-end">
+          <span className="text-[10px] font-bold text-accent uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+            View Details <ArrowRight size={12} />
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -1635,13 +1714,23 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments, onBac
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [dept, setDept] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'card' | 'screenshot'>('card');
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'status'>('date');
 
   const filtered = list.filter((c: any) => {
     const matchesSearch = c.description.toLowerCase().includes(search.toLowerCase()) || 
-                          c.address.toLowerCase().includes(search.toLowerCase());
+                          c.address.toLowerCase().includes(search.toLowerCase()) ||
+                          c.id.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !status || c.status === status;
     const matchesDept = !dept || c.category === dept;
     return matchesSearch && matchesStatus && matchesDept;
+  }).sort((a: any, b: any) => {
+    if (sortBy === 'date') return new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (sortBy === 'priority') {
+      const p: any = { high: 3, medium: 2, low: 1 };
+      return p[b.priority] - p[a.priority];
+    }
+    return a.status.localeCompare(b.status);
   });
 
   return (
@@ -1664,12 +1753,47 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments, onBac
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
           <input 
             type="text" 
-            placeholder="Search complaints..."
+            placeholder="Search by ID, description or address..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-xl outline-none focus:border-accent transition-colors"
           />
         </div>
+        
+        <div className="flex items-center bg-white border border-border rounded-xl p-1 gap-1">
+          <button 
+            onClick={() => setViewMode('card')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'card' ? 'bg-ink text-white' : 'text-muted hover:bg-cream'}`}
+            title="Card View"
+          >
+            <LayoutDashboard size={18} />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-ink text-white' : 'text-muted hover:bg-cream'}`}
+            title="List View"
+          >
+            <ClipboardList size={18} />
+          </button>
+          <button 
+            onClick={() => setViewMode('screenshot')}
+            className={`p-2 rounded-lg transition-all ${viewMode === 'screenshot' ? 'bg-ink text-white' : 'text-muted hover:bg-cream'}`}
+            title="Screenshot View"
+          >
+            <MapPin size={18} />
+          </button>
+        </div>
+
+        <select 
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          className="px-4 py-3 bg-white border border-border rounded-xl outline-none focus:border-accent transition-colors text-sm font-medium"
+        >
+          <option value="date">Sort by Date</option>
+          <option value="priority">Sort by Priority</option>
+          <option value="status">Sort by Status</option>
+        </select>
+
         <select 
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -1694,16 +1818,22 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments, onBac
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className={viewMode === 'list' ? 'space-y-2' : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
         {filtered.length === 0 ? (
-          <div className="bg-white border border-border rounded-2xl p-12 text-center">
+          <div className="col-span-full bg-white border border-border rounded-2xl p-12 text-center">
             <div className="text-4xl mb-4">🔍</div>
             <h3 className="text-xl font-serif mb-2">No results found</h3>
             <p className="text-muted">Try adjusting your search or filters.</p>
           </div>
         ) : (
           filtered.map((c: any) => (
-            <ComplaintCard key={c.id} complaint={c} onClick={() => onSelect(c)} departments={departments} />
+            <ComplaintCard 
+              key={c.id} 
+              complaint={c} 
+              onClick={() => onSelect(c)} 
+              departments={departments} 
+              viewMode={viewMode}
+            />
           ))
         )}
       </div>
