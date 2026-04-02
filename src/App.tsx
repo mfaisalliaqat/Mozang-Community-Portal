@@ -26,8 +26,22 @@ import {
   Users2
 } from 'lucide-react';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
+import { OpenLocationCode } from 'open-location-code';
+
+const olc = new OpenLocationCode();
+
+function toDMS(lat: number, lng: number) {
+  const format = (val: number, pos: string, neg: string) => {
+    const abs = Math.abs(val);
+    const deg = Math.floor(abs);
+    const min = Math.floor((abs - deg) * 60);
+    const sec = ((abs - deg - min / 60) * 3600).toFixed(1);
+    return `${deg}°${min}'${sec}"${val >= 0 ? pos : neg}`;
+  };
+  return `${format(lat, 'N', 'S')} ${format(lng, 'E', 'W')}`;
+}
 
 // Fix for default marker icon in leaflet
 // @ts-ignore
@@ -1396,9 +1410,15 @@ function SubmitForm({
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
       const data = await res.json();
-      if (data.display_name) {
-        setNewGpsAddress(data.display_name);
-      }
+      
+      const dms = toDMS(lat, lng);
+      const fullPlusCode = olc.encode(lat, lng);
+      const city = data.address.city || data.address.town || data.address.suburb || data.address.state || 'Lahore';
+      const country = data.address.country || 'Pakistan';
+      const shortPlusCode = olc.shorten(fullPlusCode, lat, lng);
+      
+      const formattedLocation = `${dms}\n${fullPlusCode} ${city}, ${country}`;
+      setNewGpsAddress(formattedLocation);
     } catch (e) {
       console.error('Reverse geocoding failed', e);
     }
@@ -1479,13 +1499,7 @@ function SubmitForm({
                   className="text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
                 >
                   <Navigation size={14} className={isLocating ? 'animate-pulse' : ''} /> 
-                  {isLocating ? 'Locating...' : 'Use My Current Location'}
-                </button>
-                <button 
-                  onClick={() => setShowMap(!showMap)}
-                  className="text-accent hover:underline flex items-center gap-1"
-                >
-                  <Map size={14} /> {newLat ? 'Change Location Pin' : 'Tag Location on Map'}
+                  {isLocating ? 'Locating...' : 'My Location'}
                 </button>
               </div>
             </label>
@@ -1501,16 +1515,17 @@ function SubmitForm({
             </div>
             {newGpsAddress && (
               <div className="space-y-1.5 mt-4 animate-in fade-in slide-in-from-top-2">
-                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Detected Location (GPS Address)</label>
-                <div className="p-3 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-2">
-                  <CheckCircle2 size={14} className="text-green mt-0.5 shrink-0" />
-                  <span>{newGpsAddress}</span>
+                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Precise Location Details</label>
+                <div className="p-4 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-3">
+                  <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={16} className="text-accent" />
+                  </div>
+                  <div className="space-y-1">
+                    {newGpsAddress.split('\n').map((line: string, i: number) => (
+                      <div key={i} className={i === 0 ? "font-bold text-sm" : "text-muted"}>{line}</div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {newLat && (
-              <div className="text-[10px] text-green font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
-                <CheckCircle2 size={12} /> Coordinates: {newLat.toFixed(6)}, {newLng.toFixed(6)}
               </div>
             )}
           </div>
@@ -1581,7 +1596,19 @@ function MapPicker({ lat, lng, onChange }: any) {
     });
 
     return lat ? (
-      <Marker position={[lat, lng]} />
+      <>
+        <Marker position={[lat, lng]} />
+        <CircleMarker 
+          center={[lat, lng]} 
+          radius={12} 
+          pathOptions={{ fillColor: '#3b82f6', fillOpacity: 0.4, color: 'white', weight: 2 }} 
+        />
+        <CircleMarker 
+          center={[lat, lng]} 
+          radius={6} 
+          pathOptions={{ fillColor: '#3b82f6', fillOpacity: 1, color: 'white', weight: 2 }} 
+        />
+      </>
     ) : null;
   }
 
@@ -2323,9 +2350,15 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
                 <Map size={12} /> Tagged Location
               </div>
               {complaint.gpsAddress && (
-                <div className="p-3 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-2 mb-2">
-                  <Navigation size={14} className="text-accent mt-0.5 shrink-0" />
-                  <span>{complaint.gpsAddress}</span>
+                <div className="p-4 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-3 mb-4">
+                  <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center shrink-0">
+                    <Navigation size={16} className="text-accent" />
+                  </div>
+                  <div className="space-y-1">
+                    {complaint.gpsAddress.split('\n').map((line: string, i: number) => (
+                      <div key={i} className={i === 0 ? "font-bold text-sm" : "text-muted"}>{line}</div>
+                    ))}
+                  </div>
                 </div>
               )}
               <div className="h-48 rounded-2xl overflow-hidden border border-border">
