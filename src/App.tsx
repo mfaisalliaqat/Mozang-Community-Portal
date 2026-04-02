@@ -652,7 +652,7 @@ function App() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.7 }}
               >
-                <div className="text-4xl font-serif text-white mb-1">{settings.departments_count || '6'}</div>
+                <div className="text-4xl font-serif text-white mb-1">{settings.departments_count || '0'}</div>
                 <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Departments</div>
               </motion.div>
               <motion.div
@@ -1100,12 +1100,12 @@ function SidebarItem({ icon, label, active, onClick, count }: { icon: React.Reac
 
 function PortalSettingsView({ settings, onUpdate }: any) {
   const [issuesResolved, setIssuesResolved] = useState(settings.issues_resolved || '0');
-  const [deptsCount, setDeptsCount] = useState(settings.departments_count || '6');
+  const [deptsCount, setDeptsCount] = useState(settings.departments_count || '0');
   const [usersCount, setUsersCount] = useState(settings.users_count || '0');
 
   useEffect(() => {
     setIssuesResolved(settings.issues_resolved || '0');
-    setDeptsCount(settings.departments_count || '6');
+    setDeptsCount(settings.departments_count || '0');
     setUsersCount(settings.users_count || '0');
   }, [settings]);
 

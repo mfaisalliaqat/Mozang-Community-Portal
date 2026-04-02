@@ -98,6 +98,7 @@ try {
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lat REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
+  try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
   console.error('Failed to verify database schema:', error);
@@ -142,7 +143,7 @@ if (deptsExist.count === 0) {
 const settingsExist = db.prepare("SELECT count(*) as count FROM settings").get() as { count: number };
 if (settingsExist.count === 0) {
   db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('issues_resolved', '0');
-  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('departments_count', '6');
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('departments_count', '0');
   console.log('Seeded initial settings');
 }
 
