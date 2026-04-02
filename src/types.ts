@@ -30,9 +30,16 @@ export interface Category {
   deptId: string;
 }
 
+export interface SubCategory {
+  id: string;
+  deptId: string;
+  name: string;
+}
+
 export interface Complaint {
   id: string;
   category: string;
+  subcategory?: string;
   description: string;
   status: Status;
   priority: Priority;
@@ -41,6 +48,8 @@ export interface Complaint {
   residentId: string;
   address: string;
   contact: string;
+  lat?: number;
+  lng?: number;
   timeline: TimelineItem[];
 }
 

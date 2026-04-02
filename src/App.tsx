@@ -24,7 +24,18 @@ import {
   Map,
   Users2
 } from 'lucide-react';
-import { User, Role, Complaint, Announcement, Status, Priority, Department, Category } from './types';
+import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix for default marker icon in leaflet
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
 // --- ERROR HANDLING ---
@@ -97,6 +108,7 @@ function App() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({
     issues_resolved: '0',
     departments_count: '6'
@@ -106,9 +118,12 @@ function App() {
 
   // Form states
   const [newCategory, setNewCategory] = useState('water');
+  const [newSubCategory, setNewSubCategory] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newLat, setNewLat] = useState<number | null>(null);
+  const [newLng, setNewLng] = useState<number | null>(null);
 
   // User Management
   const [userName, setUserName] = useState('');
@@ -174,6 +189,7 @@ function App() {
       const endpoints = [
         { name: 'users', url: '/api/users' },
         { name: 'departments', url: '/api/departments' },
+        { name: 'subcategories', url: '/api/subcategories' },
         { name: 'complaints', url: '/api/complaints' },
         { name: 'announcements', url: '/api/announcements' },
         { name: 'settings', url: '/api/settings' }
@@ -193,11 +209,12 @@ function App() {
         return res.json();
       }));
 
-      const [uList, dList, cList, aList, sList] = results;
+      const [uList, dList, subList, cList, aList, sList] = results;
 
       console.log('Data fetched successfully:', {
         users: uList.length,
         depts: dList.length,
+        subs: subList.length,
         complaints: cList.length,
         announcements: aList.length,
         settings: Object.keys(sList).length
@@ -205,6 +222,7 @@ function App() {
 
       setUsers(uList);
       setDepartments(dList);
+      setSubCategories(subList);
       setComplaints(cList);
       setAnnouncements(aList);
       setSettings(sList);
@@ -371,6 +389,48 @@ function App() {
     }
   };
 
+  const updateDept = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/departments/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error('Failed to update department');
+      showToast('Department updated');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const addSubCategory = async (deptId: string, name: string) => {
+    const id = `${deptId}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+    try {
+      const res = await fetch('/api/subcategories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, deptId, name })
+      });
+      if (!res.ok) throw new Error('Failed to add sub-category');
+      showToast('Sub-category added');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteSubCategory = async (id: string) => {
+    try {
+      const res = await fetch(`/api/subcategories/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete sub-category');
+      showToast('Sub-category deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
   const deleteDept = async (id: string) => {
     try {
       const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
@@ -392,6 +452,7 @@ function App() {
     const newComplaint: Complaint = {
       id,
       category: newCategory,
+      subcategory: newSubCategory,
       description: newDesc,
       status: 'pending',
       priority: 'medium',
@@ -400,6 +461,8 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
+      lat: newLat || undefined,
+      lng: newLng || undefined,
       timeline: [{ 
         time: today, 
         text: 'Complaint submitted by resident',
@@ -421,6 +484,9 @@ function App() {
       setNewAddress('');
       setNewContact('');
       setNewDesc('');
+      setNewSubCategory('');
+      setNewLat(null);
+      setNewLng(null);
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -863,12 +929,16 @@ function App() {
               {currentPage === 'submit' && (
                 <SubmitForm 
                   newCategory={newCategory} setNewCategory={setNewCategory}
+                  newSubCategory={newSubCategory} setNewSubCategory={setNewSubCategory}
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
+                  newLat={newLat} setNewLat={setNewLat}
+                  newLng={newLng} setNewLng={setNewLng}
                   onSubmit={submitComplaint}
                   onCancel={() => setCurrentPage('dashboard')}
                   departments={departments}
+                  subCategories={subCategories}
                 />
               )}
               {currentPage === 'my-complaints' && (
@@ -940,6 +1010,10 @@ function App() {
                   deptName={deptName} setDeptName={setDeptName}
                   onAdd={addDept}
                   onDelete={deleteDept}
+                  onUpdate={updateDept}
+                  subCategories={subCategories}
+                  onAddSub={addSubCategory}
+                  onDeleteSub={deleteSubCategory}
                   complaints={complaints}
                 />
               )}
@@ -1298,12 +1372,19 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
 
 function SubmitForm({ 
   newCategory, setNewCategory, 
+  newSubCategory, setNewSubCategory,
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newDesc, setNewDesc, 
+  newLat, setNewLat,
+  newLng, setNewLng,
   onSubmit, onCancel,
-  departments
+  departments,
+  subCategories
 }: any) {
+  const [showMap, setShowMap] = useState(false);
+  const filteredSubs = subCategories.filter((s: any) => s.deptId === newCategory);
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="page-header">
@@ -1313,11 +1394,14 @@ function SubmitForm({
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="md:col-span-2 space-y-1.5">
+          <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Department / Category *</label>
             <select 
               value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
+              onChange={(e) => {
+                setNewCategory(e.target.value);
+                setNewSubCategory('');
+              }}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             >
               {departments.map((d: any) => (
@@ -1325,8 +1409,29 @@ function SubmitForm({
               ))}
             </select>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Sub-category (Problem Type)</label>
+            <select 
+              value={newSubCategory}
+              onChange={(e) => setNewSubCategory(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            >
+              <option value="">Select a specific issue...</option>
+              {filteredSubs.map((s: any) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Complete Address *</label>
+            <label className="text-xs font-semibold tracking-wide flex justify-between items-center">
+              Complete Address *
+              <button 
+                onClick={() => setShowMap(!showMap)}
+                className="text-accent hover:underline flex items-center gap-1"
+              >
+                <Map size={14} /> {newLat ? 'Change Location Pin' : 'Tag Location on Map'}
+              </button>
+            </label>
             <div className="relative">
               <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
               <input 
@@ -1337,7 +1442,33 @@ function SubmitForm({
                 placeholder="Enter your complete address"
               />
             </div>
+            {newLat && (
+              <div className="text-[10px] text-green font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
+                <CheckCircle2 size={12} /> Location Tagged ({newLat.toFixed(4)}, {newLng.toFixed(4)})
+              </div>
+            )}
           </div>
+
+          <AnimatePresence>
+            {showMap && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 300, opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="md:col-span-2 overflow-hidden rounded-xl border border-border"
+              >
+                <MapPicker 
+                  lat={newLat || 31.5204} 
+                  lng={newLng || 74.3587} 
+                  onChange={(lat: number, lng: number) => {
+                    setNewLat(lat);
+                    setNewLng(lng);
+                  }} 
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="md:col-span-2 space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Contact Number *</label>
             <input 
@@ -1375,6 +1506,30 @@ function SubmitForm({
         </div>
       </div>
     </div>
+  );
+}
+
+function MapPicker({ lat, lng, onChange }: any) {
+  function LocationMarker() {
+    useMapEvents({
+      click(e) {
+        onChange(e.latlng.lat, e.latlng.lng);
+      },
+    });
+
+    return lat ? (
+      <Marker position={[lat, lng]} />
+    ) : null;
+  }
+
+  return (
+    <MapContainer center={[lat, lng]} zoom={13} style={{ height: '100%', width: '100%' }}>
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
+      <LocationMarker />
+    </MapContainer>
   );
 }
 
@@ -1744,13 +1899,34 @@ function AdminDeptsView({
   deptName, setDeptName, 
   onAdd, 
   onDelete, 
+  onUpdate,
+  subCategories,
+  onAddSub,
+  onDeleteSub,
   complaints 
 }: any) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [newSubName, setNewSubName] = useState('');
+  const [selectedDeptForSubs, setSelectedDeptForSubs] = useState<string | null>(null);
+
+  const handleStartEdit = (d: any) => {
+    setEditingId(d.id);
+    setEditName(d.name);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingId) {
+      onUpdate(editingId, editName);
+      setEditingId(null);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="page-header">
         <h1 className="text-4xl font-serif">Manage Departments</h1>
-        <p className="text-muted mt-1">Configure the departments that handle community complaints.</p>
+        <p className="text-muted mt-1">Configure the departments and their specific problem categories.</p>
       </div>
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
@@ -1778,23 +1954,116 @@ function AdminDeptsView({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {departments.map((d: any) => {
           const count = complaints.filter((c: any) => c.category === d.id).length;
+          const isEditing = editingId === d.id;
+          const deptSubs = subCategories.filter((s: any) => s.deptId === d.id);
+
           return (
-            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group">
+            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group flex flex-col">
               <div className="flex justify-between items-start mb-6">
                 <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
                   <Building2 size={24} className="text-accent" />
                 </div>
-                <button 
-                  onClick={() => onDelete(d.id)}
-                  className="p-2 text-muted hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                >
-                  <X size={18} />
-                </button>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => handleStartEdit(d)}
+                    className="p-2 text-muted hover:text-accent transition-colors"
+                    title="Edit Department"
+                  >
+                    <MapPin size={16} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(d.id)}
+                    className="p-2 text-muted hover:text-rose-500 transition-colors"
+                    title="Delete Department"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
-              <h3 className="font-bold text-ink mb-1">{d.name}</h3>
-              <div className="flex items-center justify-between">
+
+              {isEditing ? (
+                <div className="space-y-3 mb-4">
+                  <input 
+                    type="text" 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3 py-2 bg-paper border border-border rounded-lg outline-none focus:border-accent text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleSaveEdit}
+                      className="flex-1 py-2 bg-accent text-white rounded-lg text-xs font-bold"
+                    >
+                      Save
+                    </button>
+                    <button 
+                      onClick={() => setEditingId(null)}
+                      className="flex-1 py-2 bg-cream text-ink rounded-lg text-xs font-bold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h3 className="font-bold text-ink mb-1">{d.name}</h3>
+              )}
+
+              <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-muted font-medium uppercase tracking-wider">{count} complaints</span>
                 <span className="text-[10px] font-mono text-muted bg-cream px-2 py-0.5 rounded">{d.id}</span>
+              </div>
+
+              <div className="mt-auto pt-4 border-t border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted uppercase tracking-widest">Sub-categories</span>
+                  <button 
+                    onClick={() => setSelectedDeptForSubs(selectedDeptForSubs === d.id ? null : d.id)}
+                    className="text-[10px] text-accent font-bold hover:underline"
+                  >
+                    {selectedDeptForSubs === d.id ? 'Close' : 'Manage'}
+                  </button>
+                </div>
+
+                {selectedDeptForSubs === d.id && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={newSubName}
+                        onChange={(e) => setNewSubName(e.target.value)}
+                        placeholder="New sub-category..."
+                        className="flex-1 px-3 py-2 bg-paper border border-border rounded-lg outline-none focus:border-accent text-xs"
+                      />
+                      <button 
+                        onClick={() => {
+                          if (newSubName) {
+                            onAddSub(d.id, newSubName);
+                            setNewSubName('');
+                          }
+                        }}
+                        className="p-2 bg-accent text-white rounded-lg"
+                      >
+                        <PlusCircle size={14} />
+                      </button>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                      {deptSubs.map((s: any) => (
+                        <div key={s.id} className="flex items-center justify-between p-2 bg-cream rounded-lg text-[10px]">
+                          <span className="font-medium truncate mr-2">{s.name}</span>
+                          <button 
+                            onClick={() => onDeleteSub(s.id)}
+                            className="text-muted hover:text-rose-500"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {deptSubs.length === 0 && (
+                        <div className="text-[10px] text-muted italic text-center py-2">No sub-categories added</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -1959,6 +2228,11 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
             <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
               {dept?.name || complaint.category}
             </span>
+            {complaint.subcategory && (
+              <span className="bg-accent/10 px-3 py-1 rounded-full text-[10px] font-bold text-accent uppercase tracking-wider flex items-center gap-1">
+                {complaint.subcategory}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -1979,6 +2253,23 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
               <div className="text-sm font-medium flex items-center gap-2"><Phone size={14} className="text-muted" /> {complaint.contact}</div>
             </div>
           </div>
+
+          {complaint.lat && complaint.lng && (
+            <div className="mb-8 space-y-2">
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center gap-1">
+                <Map size={12} /> Tagged Location
+              </div>
+              <div className="h-48 rounded-2xl overflow-hidden border border-border">
+                <MapContainer center={[complaint.lat, complaint.lng]} zoom={15} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <Marker position={[complaint.lat, complaint.lng]} />
+                </MapContainer>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2 mb-8">
             <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Description</div>

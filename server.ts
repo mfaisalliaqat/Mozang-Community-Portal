@@ -40,9 +40,17 @@ try {
       icon TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sub_categories (
+      id TEXT PRIMARY KEY,
+      deptId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      FOREIGN KEY (deptId) REFERENCES departments(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS complaints (
       id TEXT PRIMARY KEY,
       category TEXT NOT NULL,
+      subcategory TEXT,
       description TEXT NOT NULL,
       status TEXT NOT NULL,
       priority TEXT NOT NULL,
@@ -50,7 +58,9 @@ try {
       resident TEXT NOT NULL,
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
-      contact TEXT NOT NULL
+      contact TEXT NOT NULL,
+      lat REAL,
+      lng REAL
     );
 
     CREATE TABLE IF NOT EXISTS timeline (
@@ -82,6 +92,9 @@ try {
   try { db.prepare("ALTER TABLE timeline ADD COLUMN authorName TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN address TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN contact TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN subcategory TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN lat REAL").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
   console.log('Database schema verified');
 } catch (error) {
@@ -103,18 +116,24 @@ if (adminExists.count === 0) {
 const deptsExist = db.prepare("SELECT count(*) as count FROM departments").get() as { count: number };
 if (deptsExist.count === 0) {
   const depts = [
-    { id: 'water', name: 'Water & Sewerage', icon: '' },
-    { id: 'sanitation', name: 'Sanitation', icon: '' },
-    { id: 'roads', name: 'Roads & Infrastructure', icon: '' },
-    { id: 'electricity', name: 'Electricity', icon: '' },
-    { id: 'parks', name: 'Parks & Recreation', icon: '' },
-    { id: 'safety', name: 'Public Safety', icon: '' },
+    { id: 'water', name: 'Water & Sewerage (WASA)', icon: '💧', subs: ['No water supply', 'Low water pressure', 'Sewerage overflow', 'Drain blockage', 'Dirty/contaminated water'] },
+    { id: 'electricity', name: 'Electricity (LESCO / WAPDA)', icon: '⚡', subs: ['Load shedding (unscheduled outages)', 'Low/high voltage'] },
+    { id: 'sanitation', name: 'Sanitation (LWMC)', icon: '🗑️', subs: ['Street cleanliness issues', 'Garbage not collected', 'Overflowing bins'] },
+    { id: 'roads', name: 'Roads & Infrastructure (LDA / MCL)', icon: '🛣️', subs: ['Road patchwork', 'Street patchwork'] },
+    { id: 'lights', name: 'Street Lights (MCL / Local Govt)', icon: '💡', subs: ['Street lights not working', 'Dim lighting (security risk)', 'Poles damaged', 'New light installation request'] },
+    { id: 'gas', name: 'Gas (SNGPL)', icon: '🔥', subs: ['Low gas pressure', 'No gas supply'] },
+    { id: 'police', name: 'Police / Security', icon: '🚓', subs: ['Street Crimes', 'Women Protection', 'Suspicious activity', 'Other'] },
   ];
   const insertDept = db.prepare("INSERT INTO departments (id, name, icon) VALUES (?, ?, ?)");
+  const insertSub = db.prepare("INSERT INTO sub_categories (id, deptId, name) VALUES (?, ?, ?)");
   for (const d of depts) {
     insertDept.run(d.id, d.name, d.icon);
+    for (const s of d.subs) {
+      const sId = `${d.id}-${s.toLowerCase().replace(/\s+/g, '-')}`;
+      insertSub.run(sId, d.id, s);
+    }
   }
-  console.log('Seeded initial departments');
+  console.log('Seeded initial departments and sub-categories');
 }
 
 // Seed initial settings if none exist
@@ -227,6 +246,49 @@ async function startServer() {
     }
   });
 
+  app.patch("/api/departments/:id", (req, res) => {
+    const { name, icon } = req.body;
+    try {
+      db.prepare("UPDATE departments SET name = ?, icon = ? WHERE id = ?").run(name, icon || '', req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating department:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Sub-categories
+  app.get("/api/subcategories", (req, res) => {
+    try {
+      const subs = db.prepare("SELECT * FROM sub_categories").all();
+      res.json(subs);
+    } catch (error: any) {
+      console.error('Error fetching sub-categories:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/subcategories", (req, res) => {
+    const { id, deptId, name } = req.body;
+    try {
+      db.prepare("INSERT INTO sub_categories (id, deptId, name) VALUES (?, ?, ?)").run(id, deptId, name);
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      console.error('Error creating sub-category:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/subcategories/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM sub_categories WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting sub-category:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Complaints
   app.get("/api/complaints", (req, res) => {
     try {
@@ -251,13 +313,13 @@ async function startServer() {
   });
 
   app.post("/api/complaints", (req, res) => {
-    const { id, category, description, status, priority, date, resident, residentId, address, contact, timeline } = req.body;
+    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng, timeline } = req.body;
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
-          INSERT INTO complaints (id, category, description, status, priority, date, resident, residentId, address, contact)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, category, description, status, priority, date, resident, residentId, address, contact);
+          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng);
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {
