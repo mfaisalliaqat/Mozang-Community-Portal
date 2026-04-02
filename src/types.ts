@@ -14,6 +14,8 @@ export interface User {
   color: string;
   dept?: string;
   deptName?: string;
+  address?: string;
+  contact?: string;
 }
 
 export interface Department {

@@ -107,6 +107,8 @@ function App() {
   const [userPass, setUserPass] = useState('');
   const [userRole, setUserRole] = useState<Role>('resident');
   const [userDept, setUserDept] = useState('');
+  const [userContact, setUserContact] = useState('');
+  const [userAddress, setUserAddress] = useState('');
   const [userAvatar, setUserAvatar] = useState('');
   const [userColor, setUserColor] = useState('');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -175,6 +177,13 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (currentPage === 'submit' && currentUser) {
+      setNewAddress(currentUser.address || '');
+      setNewContact(currentUser.contact || '');
+    }
+  }, [currentPage, currentUser]);
+
+  useEffect(() => {
     console.log('Users state updated:', users.length, 'users loaded');
   }, [users]);
 
@@ -223,7 +232,9 @@ function App() {
       dept: userRole === 'officer' ? userDept : undefined,
       deptName: userRole === 'officer' ? departments.find(d => d.id === userDept)?.name : undefined,
       avatar: userName.split(' ').map(n => n[0]).join('').toUpperCase(),
-      color: '#' + Math.floor(Math.random()*16777215).toString(16)
+      color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16),
+      address: userAddress,
+      contact: userContact
     };
     
     try {
@@ -236,6 +247,7 @@ function App() {
       showToast('User created');
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
+      setUserAddress(''); setUserContact('');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -255,8 +267,10 @@ function App() {
       role: userRole,
       dept: userRole === 'officer' ? userDept : undefined,
       deptName: userRole === 'officer' ? departments.find(d => d.id === userDept)?.name : undefined,
-      avatar: userAvatar || userName.split(' ').map(n => n[0]).join('').toUpperCase(),
-      color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
+      avatar: userName.split(' ').map(n => n[0]).join('').toUpperCase(),
+      color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16),
+      address: userAddress,
+      contact: userContact
     };
     
     try {
@@ -269,6 +283,7 @@ function App() {
       showToast('User updated');
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
+      setUserAddress(''); setUserContact('');
       setEditingUserId(null);
       fetchData();
     } catch (e) {
@@ -543,6 +558,14 @@ function App() {
               >
                 <div className="text-4xl font-serif text-white mb-1">{settings.departments_count || '6'}</div>
                 <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Departments</div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.8 }}
+              >
+                <div className="text-4xl font-serif text-white mb-1">{settings.users_count || '0'}</div>
+                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Users</div>
               </motion.div>
             </div>
 
@@ -848,7 +871,8 @@ function App() {
                   userPass={userPass} setUserPass={setUserPass}
                   userRole={userRole} setUserRole={setUserRole}
                   userDept={userDept} setUserDept={setUserDept}
-                  userAvatar={userAvatar} setUserAvatar={setUserAvatar}
+                  userContact={userContact} setUserContact={setUserContact}
+                  userAddress={userAddress} setUserAddress={setUserAddress}
                   userColor={userColor} setUserColor={setUserColor}
                   editingUserId={editingUserId} setEditingUserId={setEditingUserId}
                   departments={departments}
@@ -955,15 +979,18 @@ function SidebarItem({ icon, label, active, onClick, count }: { icon: React.Reac
 function PortalSettingsView({ settings, onUpdate }: any) {
   const [issuesResolved, setIssuesResolved] = useState(settings.issues_resolved || '0');
   const [deptsCount, setDeptsCount] = useState(settings.departments_count || '6');
+  const [usersCount, setUsersCount] = useState(settings.users_count || '0');
 
   useEffect(() => {
     setIssuesResolved(settings.issues_resolved || '0');
     setDeptsCount(settings.departments_count || '6');
+    setUsersCount(settings.users_count || '0');
   }, [settings]);
 
   const handleSave = () => {
     onUpdate('issues_resolved', issuesResolved);
     onUpdate('departments_count', deptsCount);
+    onUpdate('users_count', usersCount);
   };
 
   return (
@@ -974,7 +1001,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
       </div>
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Issues Resolved Count</label>
             <input 
@@ -983,6 +1010,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
               onChange={(e) => setIssuesResolved(e.target.value)}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             />
+            <p className="text-[10px] text-muted">Actual in DB: {settings.actual_resolved}</p>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Departments Count</label>
@@ -992,6 +1020,17 @@ function PortalSettingsView({ settings, onUpdate }: any) {
               onChange={(e) => setDeptsCount(e.target.value)}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             />
+            <p className="text-[10px] text-muted">Actual in DB: {settings.actual_departments}</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Users Count</label>
+            <input 
+              type="number" 
+              value={usersCount}
+              onChange={(e) => setUsersCount(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            />
+            <p className="text-[10px] text-muted">Actual in DB: {settings.actual_users}</p>
           </div>
         </div>
 
@@ -1425,7 +1464,8 @@ function AdminUsersView({
   userPass, setUserPass, 
   userRole, setUserRole, 
   userDept, setUserDept, 
-  userAvatar, setUserAvatar,
+  userContact, setUserContact,
+  userAddress, setUserAddress,
   userColor, setUserColor,
   editingUserId, setEditingUserId,
   departments, 
@@ -1440,7 +1480,8 @@ function AdminUsersView({
     setUserPass(u.password);
     setUserRole(u.role);
     setUserDept(u.dept || '');
-    setUserAvatar(u.avatar || '');
+    setUserContact(u.contact || '');
+    setUserAddress(u.address || '');
     setUserColor(u.color || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1452,7 +1493,8 @@ function AdminUsersView({
     setUserPass('');
     setUserRole('resident');
     setUserDept('');
-    setUserAvatar('');
+    setUserContact('');
+    setUserAddress('');
     setUserColor('');
   };
 
@@ -1497,6 +1539,26 @@ function AdminUsersView({
             />
           </div>
           <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Contact Number</label>
+            <input 
+              type="text" 
+              value={userContact}
+              onChange={(e) => setUserContact(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="0300-1234567"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Address</label>
+            <input 
+              type="text" 
+              value={userAddress}
+              onChange={(e) => setUserAddress(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="House #123, Street #456"
+            />
+          </div>
+          <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">User Role</label>
             <select 
               value={userRole}
@@ -1523,17 +1585,6 @@ function AdminUsersView({
               </select>
             </div>
           )}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Avatar Initials</label>
-            <input 
-              type="text" 
-              value={userAvatar}
-              onChange={(e) => setUserAvatar(e.target.value)}
-              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-              placeholder="JD"
-              maxLength={2}
-            />
-          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Profile Color (Hex)</label>
             <div className="flex gap-2">

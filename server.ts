@@ -29,7 +29,9 @@ try {
       dept TEXT,
       deptName TEXT,
       avatar TEXT,
-      color TEXT
+      color TEXT,
+      address TEXT,
+      contact TEXT
     );
 
     CREATE TABLE IF NOT EXISTS departments (
@@ -78,6 +80,8 @@ try {
   // Migration for existing databases
   try { db.prepare("ALTER TABLE timeline ADD COLUMN authorId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE timeline ADD COLUMN authorName TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE users ADD COLUMN address TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE users ADD COLUMN contact TEXT").run(); } catch (e) {}
 
   console.log('Database schema verified');
 } catch (error) {
@@ -153,12 +157,12 @@ async function startServer() {
   });
 
   app.post("/api/users", (req, res) => {
-    const { id, name, email, password, role, dept, deptName, avatar, color } = req.body;
+    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact } = req.body;
     try {
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, name, email, password, role, dept, deptName, avatar, color);
+        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, name, email, password, role, dept, deptName, avatar, color, address, contact);
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -177,13 +181,13 @@ async function startServer() {
   });
 
   app.patch("/api/users/:id", (req, res) => {
-    const { name, email, password, role, dept, deptName, avatar, color } = req.body;
+    const { name, email, password, role, dept, deptName, avatar, color, address, contact } = req.body;
     try {
       db.prepare(`
         UPDATE users 
-        SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?
+        SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?, address = ?, contact = ?
         WHERE id = ?
-      `).run(name, email, password, role, dept, deptName, avatar, color, req.params.id);
+      `).run(name, email, password, role, dept, deptName, avatar, color, address, contact, req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error updating user:', error);
@@ -328,6 +332,16 @@ async function startServer() {
         acc[curr.key] = curr.value;
         return acc;
       }, {});
+
+      // Add actual counts
+      const userCount = db.prepare("SELECT count(*) as count FROM users").get().count;
+      const deptCount = db.prepare("SELECT count(*) as count FROM departments").get().count;
+      const resolvedCount = db.prepare("SELECT count(*) as count FROM complaints WHERE status = 'resolved'").get().count;
+
+      result.actual_users = userCount;
+      result.actual_departments = deptCount;
+      result.actual_resolved = resolvedCount;
+
       res.json(result);
     } catch (error: any) {
       console.error('Error fetching settings:', error);
