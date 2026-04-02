@@ -79,11 +79,20 @@ export default function AppWrapper() {
 }
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('mozang_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginRole, setLoginRole] = useState<Role>('resident');
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState(() => {
+    return localStorage.getItem('mozang_page') || 'dashboard';
+  });
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -123,6 +132,18 @@ function App() {
   const [annBody, setAnnBody] = useState('');
 
   const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('mozang_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('mozang_user');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('mozang_page', currentPage);
+  }, [currentPage]);
 
   // --- DATA FETCHING ---
   const fetchData = async () => {
@@ -215,6 +236,8 @@ function App() {
     setCurrentUser(null);
     setLoginEmail('');
     setLoginPass('');
+    localStorage.removeItem('mozang_user');
+    localStorage.removeItem('mozang_page');
   };
 
   const addUser = async () => {
@@ -652,10 +675,6 @@ function App() {
               >
                 Sign In <ArrowRight size={20} />
               </button>
-            </div>
-            
-            <div className="mt-12 text-center">
-              <p className="text-muted text-sm">Need help? Contact your local department.</p>
             </div>
           </div>
         </div>
