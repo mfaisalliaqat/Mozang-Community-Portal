@@ -124,7 +124,6 @@ function App() {
 
   // Dept Management
   const [deptName, setDeptName] = useState('');
-  const [deptIcon, setDeptIcon] = useState('🏢');
 
   // Announcement Management
   const [annTag, setAnnTag] = useState<'Notice' | 'Update' | 'Alert' | 'Event'>('Notice');
@@ -132,6 +131,29 @@ function App() {
   const [annBody, setAnnBody] = useState('');
 
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [lastAnnouncementId, setLastAnnouncementId] = useState<string | null>(() => localStorage.getItem('mozang_last_announcement'));
+
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (announcements.length > 0) {
+      const latest = announcements[0];
+      if (lastAnnouncementId && latest.id !== lastAnnouncementId) {
+        if (Notification.permission === 'granted') {
+          new Notification('New Announcement: ' + latest.title, {
+            body: latest.text,
+            icon: '/favicon.ico'
+          });
+        }
+      }
+      setLastAnnouncementId(latest.id);
+      localStorage.setItem('mozang_last_announcement', latest.id);
+    }
+  }, [announcements]);
 
   useEffect(() => {
     if (currentUser) {
@@ -332,7 +354,7 @@ function App() {
     const newDept: Department = {
       id,
       name: deptName,
-      icon: deptIcon
+      icon: ''
     };
     try {
       const res = await fetch('/api/departments', {
@@ -916,7 +938,6 @@ function App() {
                 <AdminDeptsView 
                   departments={departments}
                   deptName={deptName} setDeptName={setDeptName}
-                  deptIcon={deptIcon} setDeptIcon={setDeptIcon}
                   onAdd={addDept}
                   onDelete={deleteDept}
                   complaints={complaints}
@@ -1128,11 +1149,11 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
 
   if (r === 'officer') {
     const deptComplaints = complaints.filter((c: any) => c.category === user.dept);
-    const deptIcon = departments.find((d: any) => d.id === user.dept)?.icon || '🏢';
+    const deptIcon = '';
     return (
       <div className="space-y-8">
         <div className="page-header">
-          <h1 className="text-4xl font-serif">{deptIcon} {user.deptName}</h1>
+          <h1 className="text-4xl font-serif">{user.deptName}</h1>
           <p className="text-muted mt-1">Officer Panel — Welcome, {user.name}</p>
         </div>
 
@@ -1189,7 +1210,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               return (
                 <div key={d.id} className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="font-medium flex items-center gap-2">{d.icon} {d.name}</span>
+                    <span className="font-medium flex items-center gap-2">{d.name}</span>
                     <span className="text-muted">{res.length}/{all.length} resolved</span>
                   </div>
                   <div className="h-2 bg-cream rounded-full overflow-hidden">
@@ -1259,7 +1280,7 @@ function ComplaintCard({ complaint, onClick, departments }: { complaint: Complai
       <div className="flex-1 min-w-0">
         <h4 className="font-semibold text-ink truncate mb-1">{complaint.description.substring(0, 60)}...</h4>
         <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-medium text-muted uppercase tracking-wide">
-          <span className="flex items-center gap-1">{dept?.icon || '🏢'} {dept?.name || complaint.category}</span>
+          <span className="flex items-center gap-1">{dept?.name || complaint.category}</span>
           <span className="flex items-center gap-1"><MapPin size={12} /> {complaint.address}</span>
           <span className="flex items-center gap-1"><UserIcon size={12} /> {complaint.resident}</span>
           <span className="flex items-center gap-1"><Calendar size={12} /> {complaint.date}</span>
@@ -1300,7 +1321,7 @@ function SubmitForm({
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             >
               {departments.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.icon} {d.name}</option>
+                <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
@@ -1446,7 +1467,7 @@ function DepartmentsView({ complaints, departments }: any) {
             <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
-                  {d.icon}
+                  <Building2 size={24} className="text-accent" />
                 </div>
                 <div>
                   <h3 className="font-bold text-ink">{d.name}</h3>
@@ -1599,7 +1620,7 @@ function AdminUsersView({
               >
                 <option value="">Select Department</option>
                 {departments.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.icon} {d.name}</option>
+                <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
             </div>
@@ -1721,7 +1742,6 @@ function AdminUsersView({
 function AdminDeptsView({ 
   departments, 
   deptName, setDeptName, 
-  deptIcon, setDeptIcon, 
   onAdd, 
   onDelete, 
   complaints 
@@ -1746,15 +1766,6 @@ function AdminDeptsView({
               placeholder="e.g. Waste Management"
             />
           </div>
-          <div className="space-y-1.5 w-32">
-            <label className="text-xs font-semibold tracking-wide">Icon (Emoji)</label>
-            <input 
-              type="text" 
-              value={deptIcon}
-              onChange={(e) => setDeptIcon(e.target.value)}
-              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors text-center text-xl"
-            />
-          </div>
           <button 
             onClick={onAdd}
             className="px-8 py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
@@ -1771,7 +1782,7 @@ function AdminDeptsView({
             <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group">
               <div className="flex justify-between items-start mb-6">
                 <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
-                  {d.icon}
+                  <Building2 size={24} className="text-accent" />
                 </div>
                 <button 
                   onClick={() => onDelete(d.id)}
@@ -1946,7 +1957,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
               {complaint.status.replace('-', ' ')}
             </span>
             <span className="bg-cream px-3 py-1 rounded-full text-[10px] font-bold text-muted uppercase tracking-wider flex items-center gap-1">
-              {dept?.icon || '🏢'} {dept?.name || complaint.category}
+              {dept?.name || complaint.category}
             </span>
           </div>
 

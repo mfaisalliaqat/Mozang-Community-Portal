@@ -103,12 +103,12 @@ if (adminExists.count === 0) {
 const deptsExist = db.prepare("SELECT count(*) as count FROM departments").get() as { count: number };
 if (deptsExist.count === 0) {
   const depts = [
-    { id: 'water', name: 'Water & Sewerage', icon: '💧' },
-    { id: 'sanitation', name: 'Sanitation', icon: '🗑️' },
-    { id: 'roads', name: 'Roads & Infrastructure', icon: '🛣️' },
-    { id: 'electricity', name: 'Electricity', icon: '⚡' },
-    { id: 'parks', name: 'Parks & Recreation', icon: '🌳' },
-    { id: 'safety', name: 'Public Safety', icon: '🛡️' },
+    { id: 'water', name: 'Water & Sewerage', icon: '' },
+    { id: 'sanitation', name: 'Sanitation', icon: '' },
+    { id: 'roads', name: 'Roads & Infrastructure', icon: '' },
+    { id: 'electricity', name: 'Electricity', icon: '' },
+    { id: 'parks', name: 'Parks & Recreation', icon: '' },
+    { id: 'safety', name: 'Public Safety', icon: '' },
   ];
   const insertDept = db.prepare("INSERT INTO departments (id, name, icon) VALUES (?, ?, ?)");
   for (const d of depts) {
