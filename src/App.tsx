@@ -21,36 +21,11 @@ import {
   ShieldAlert,
   Phone,
   Facebook,
-  Map,
-  Navigation,
-  Users2
+  Users2,
+  Menu,
+  ArrowLeft
 } from 'lucide-react';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
-import { MapContainer, TileLayer, Marker, useMapEvents, CircleMarker } from 'react-leaflet';
-import L from 'leaflet';
-import { OpenLocationCode } from 'open-location-code';
-
-const olc = new OpenLocationCode();
-
-function toDMS(lat: number, lng: number) {
-  const format = (val: number, pos: string, neg: string) => {
-    const abs = Math.abs(val);
-    const deg = Math.floor(abs);
-    const min = Math.floor((abs - deg) * 60);
-    const sec = ((abs - deg - min / 60) * 3600).toFixed(1);
-    return `${deg}°${min}'${sec}"${val >= 0 ? pos : neg}`;
-  };
-  return `${format(lat, 'N', 'S')} ${format(lng, 'E', 'W')}`;
-}
-
-// Fix for default marker icon in leaflet
-// @ts-ignore
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
 // --- ERROR HANDLING ---
@@ -130,6 +105,7 @@ function App() {
   });
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Form states
   const [newCategory, setNewCategory] = useState('water');
@@ -137,9 +113,6 @@ function App() {
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newGpsAddress, setNewGpsAddress] = useState('');
-  const [newLat, setNewLat] = useState<number | null>(null);
-  const [newLng, setNewLng] = useState<number | null>(null);
 
   // User Management
   const [userName, setUserName] = useState('');
@@ -477,9 +450,6 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
-      gpsAddress: newGpsAddress || undefined,
-      lat: newLat || undefined,
-      lng: newLng || undefined,
       timeline: [{ 
         time: today, 
         text: 'Complaint submitted by resident',
@@ -502,9 +472,6 @@ function App() {
       setNewContact('');
       setNewDesc('');
       setNewSubCategory('');
-      setNewGpsAddress('');
-      setNewLat(null);
-      setNewLng(null);
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -709,7 +676,7 @@ function App() {
                 <div className="text-white font-serif text-lg">Muhammad Faisal</div>
                 <div className="text-accent text-xs font-bold uppercase tracking-widest">Founder</div>
                 <div className="text-white/50 text-sm flex items-center gap-2">
-                  <Map size={14} /> Mozang The Heart of Lahore
+                  <MapPin size={14} /> Mozang The Heart of Lahore
                 </div>
               </div>
               <a 
@@ -792,8 +759,16 @@ function App() {
     <div className="min-h-screen flex flex-col">
       {/* Top Nav */}
       <nav className="h-16 bg-ink px-6 flex items-center justify-between sticky top-0 z-50">
-        <div className="text-xl font-serif text-white">
-          Mozang <span className="text-accent">Community Portal</span>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+            className="md:hidden p-2 text-white/60 hover:text-white transition-colors"
+          >
+            {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+          </button>
+          <div className="text-xl font-serif text-white">
+            Mozang <span className="text-accent">Community Portal</span>
+          </div>
         </div>
         
         <div className="flex items-center gap-6">
@@ -825,9 +800,9 @@ function App() {
         </div>
       </nav>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 relative">
         {/* Sidebar */}
-        <aside className="w-64 bg-cream border-r border-border p-6 hidden md:block">
+        <aside className={`w-64 bg-cream border-r border-border p-6 fixed inset-y-0 left-0 z-[60] md:relative md:block transition-transform duration-300 transform ${showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
           <div className="space-y-8">
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Main</div>
@@ -836,7 +811,7 @@ function App() {
                   icon={<Home size={18} />} 
                   label="Dashboard" 
                   active={currentPage === 'dashboard'} 
-                  onClick={() => setCurrentPage('dashboard')} 
+                  onClick={() => { setCurrentPage('dashboard'); setShowMobileMenu(false); }} 
                 />
                 {currentUser.role === 'resident' && (
                   <>
@@ -844,13 +819,13 @@ function App() {
                       icon={<PlusCircle size={18} />} 
                       label="Submit Complaint" 
                       active={currentPage === 'submit'} 
-                      onClick={() => setCurrentPage('submit')} 
+                      onClick={() => { setCurrentPage('submit'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
                       icon={<ClipboardList size={18} />} 
                       label="My Complaints" 
                       active={currentPage === 'my-complaints'} 
-                      onClick={() => setCurrentPage('my-complaints')} 
+                      onClick={() => { setCurrentPage('my-complaints'); setShowMobileMenu(false); }} 
                       count={getMyComplaints().length}
                     />
                   </>
@@ -861,14 +836,14 @@ function App() {
                       icon={<ClipboardList size={18} />} 
                       label="Assigned" 
                       active={currentPage === 'dept-complaints'} 
-                      onClick={() => setCurrentPage('dept-complaints')} 
+                      onClick={() => { setCurrentPage('dept-complaints'); setShowMobileMenu(false); }} 
                       count={getDeptComplaints().filter(c => c.status !== 'resolved').length}
                     />
                     <SidebarItem 
                       icon={<CheckCircle2 size={18} />} 
                       label="Resolved" 
                       active={currentPage === 'resolved'} 
-                      onClick={() => setCurrentPage('resolved')} 
+                      onClick={() => { setCurrentPage('resolved'); setShowMobileMenu(false); }} 
                     />
                   </>
                 )}
@@ -878,32 +853,32 @@ function App() {
                       icon={<ClipboardList size={18} />} 
                       label="All Complaints" 
                       active={currentPage === 'all-complaints'} 
-                      onClick={() => setCurrentPage('all-complaints')} 
+                      onClick={() => { setCurrentPage('all-complaints'); setShowMobileMenu(false); }} 
                       count={complaints.filter(c => c.status === 'pending').length}
                     />
                     <SidebarItem 
                       icon={<UserIcon size={18} />} 
                       label="Manage Users" 
                       active={currentPage === 'manage-users'} 
-                      onClick={() => setCurrentPage('manage-users')} 
+                      onClick={() => { setCurrentPage('manage-users'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
                       icon={<Building2 size={18} />} 
                       label="Manage Departments" 
                       active={currentPage === 'manage-departments'} 
-                      onClick={() => setCurrentPage('manage-departments')} 
+                      onClick={() => { setCurrentPage('manage-departments'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
                       icon={<LayoutDashboard size={18} />} 
                       label="Departments Overview" 
                       active={currentPage === 'departments'} 
-                      onClick={() => setCurrentPage('departments')} 
+                      onClick={() => { setCurrentPage('departments'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
                       icon={<Filter size={18} />} 
                       label="Portal Settings" 
                       active={currentPage === 'portal-settings'} 
-                      onClick={() => setCurrentPage('portal-settings')} 
+                      onClick={() => { setCurrentPage('portal-settings'); setShowMobileMenu(false); }} 
                     />
                   </>
                 )}
@@ -917,12 +892,25 @@ function App() {
                   icon={<Megaphone size={18} />} 
                   label="Announcements" 
                   active={currentPage === (currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
-                  onClick={() => setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
+                  onClick={() => { setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements'); setShowMobileMenu(false); }} 
                 />
               </div>
             </div>
           </div>
         </aside>
+
+        {/* Mobile Overlay */}
+        <AnimatePresence>
+          {showMobileMenu && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-ink/50 z-[55] md:hidden" 
+              onClick={() => setShowMobileMenu(false)}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Main Content */}
         <main className="flex-1 p-6 md:p-10 overflow-y-auto">
@@ -951,9 +939,6 @@ function App() {
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
-                  newGpsAddress={newGpsAddress} setNewGpsAddress={setNewGpsAddress}
-                  newLat={newLat} setNewLat={setNewLat}
-                  newLng={newLng} setNewLng={setNewLng}
                   onSubmit={submitComplaint}
                   onCancel={() => setCurrentPage('dashboard')}
                   departments={departments}
@@ -966,6 +951,7 @@ function App() {
                   list={getMyComplaints()} 
                   onSelect={setSelectedComplaint}
                   departments={departments}
+                  onBack={() => setCurrentPage('dashboard')}
                 />
               )}
               {currentPage === 'dept-complaints' && (
@@ -974,6 +960,7 @@ function App() {
                   list={getDeptComplaints().filter(c => c.status !== 'resolved')} 
                   onSelect={setSelectedComplaint}
                   departments={departments}
+                  onBack={() => setCurrentPage('dashboard')}
                 />
               )}
               {currentPage === 'resolved' && (
@@ -982,6 +969,7 @@ function App() {
                   list={getDeptComplaints().filter(c => c.status === 'resolved')} 
                   onSelect={setSelectedComplaint}
                   departments={departments}
+                  onBack={() => setCurrentPage('dashboard')}
                 />
               )}
               {currentPage === 'all-complaints' && (
@@ -991,6 +979,7 @@ function App() {
                   onSelect={setSelectedComplaint}
                   showFilters
                   departments={departments}
+                  onBack={() => setCurrentPage('dashboard')}
                 />
               )}
               {currentPage === 'manage-users' && (
@@ -1258,7 +1247,15 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
         </div>
 
         <div className="space-y-6">
-          <h2 className="text-2xl font-serif">Priority Queue</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-serif">Priority Queue</h2>
+            <button 
+              onClick={() => onNavigate('dept-complaints')}
+              className="text-xs font-bold text-accent uppercase tracking-widest hover:underline"
+            >
+              View All Assigned
+            </button>
+          </div>
           <div className="space-y-3">
             {deptComplaints.filter((c: any) => c.status !== 'resolved').length === 0 ? (
               <div className="bg-white border border-border rounded-2xl p-12 text-center">
@@ -1268,6 +1265,31 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               </div>
             ) : (
               deptComplaints.filter((c: any) => c.status !== 'resolved').map((c: any) => (
+                <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-serif">Recently Resolved</h2>
+            <button 
+              onClick={() => onNavigate('resolved')}
+              className="text-xs font-bold text-accent uppercase tracking-widest hover:underline"
+            >
+              View All Resolved
+            </button>
+          </div>
+          <div className="space-y-3">
+            {deptComplaints.filter((c: any) => c.status === 'resolved').length === 0 ? (
+              <div className="bg-white border border-border rounded-2xl p-12 text-center">
+                <div className="text-4xl mb-4">📜</div>
+                <h3 className="text-xl font-serif mb-2">No resolved issues yet</h3>
+                <p className="text-muted">Issues you resolve will appear here.</p>
+              </div>
+            ) : (
+              deptComplaints.filter((c: any) => c.status === 'resolved').slice(0, 3).map((c: any) => (
                 <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
@@ -1395,65 +1417,23 @@ function SubmitForm({
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newDesc, setNewDesc, 
-  newGpsAddress, setNewGpsAddress,
-  newLat, setNewLat,
-  newLng, setNewLng,
   onSubmit, onCancel,
   departments,
   subCategories
 }: any) {
-  const [showMap, setShowMap] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
   const filteredSubs = subCategories.filter((s: any) => s.deptId === newCategory);
-
-  const reverseGeocode = async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await res.json();
-      
-      const dms = toDMS(lat, lng);
-      const fullPlusCode = olc.encode(lat, lng);
-      const city = data.address.city || data.address.town || data.address.suburb || data.address.state || 'Lahore';
-      const country = data.address.country || 'Pakistan';
-      const shortPlusCode = olc.shorten(fullPlusCode, lat, lng);
-      
-      const formattedLocation = `${dms}\n${fullPlusCode} ${city}, ${country}`;
-      setNewGpsAddress(formattedLocation);
-    } catch (e) {
-      console.error('Reverse geocoding failed', e);
-    }
-  };
-
-  const handleLocationChange = (lat: number, lng: number) => {
-    setNewLat(lat);
-    setNewLng(lng);
-    reverseGeocode(lat, lng);
-  };
-
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
-      return;
-    }
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        handleLocationChange(latitude, longitude);
-        setIsLocating(false);
-        setShowMap(true);
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
-        alert('Unable to retrieve your location. Please check permissions.');
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true }
-    );
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={onCancel}
+          className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-xs uppercase tracking-widest"
+        >
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+      </div>
+
       <div className="page-header">
         <h1 className="text-4xl font-serif">Submit a Complaint</h1>
         <p className="text-muted mt-1">Describe your issue and it will be routed to the appropriate department.</p>
@@ -1490,19 +1470,7 @@ function SubmitForm({
             </select>
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide flex justify-between items-center">
-              Complete Address *
-              <div className="flex gap-4">
-                <button 
-                  onClick={useCurrentLocation}
-                  disabled={isLocating}
-                  className="text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
-                >
-                  <Navigation size={14} className={isLocating ? 'animate-pulse' : ''} /> 
-                  {isLocating ? 'Locating...' : 'My Location'}
-                </button>
-              </div>
-            </label>
+            <label className="text-xs font-semibold tracking-wide">Complete Address *</label>
             <div className="relative">
               <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
               <input 
@@ -1513,39 +1481,7 @@ function SubmitForm({
                 placeholder="Enter your complete address"
               />
             </div>
-            {newGpsAddress && (
-              <div className="space-y-1.5 mt-4 animate-in fade-in slide-in-from-top-2">
-                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Precise Location Details</label>
-                <div className="p-4 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-3">
-                  <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={16} className="text-accent" />
-                  </div>
-                  <div className="space-y-1">
-                    {newGpsAddress.split('\n').map((line: string, i: number) => (
-                      <div key={i} className={i === 0 ? "font-bold text-sm" : "text-muted"}>{line}</div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-
-          <AnimatePresence>
-            {showMap && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 300, opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="md:col-span-2 overflow-hidden rounded-xl border border-border"
-              >
-                <MapPicker 
-                  lat={newLat || 31.5204} 
-                  lng={newLng || 74.3587} 
-                  onChange={handleLocationChange} 
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           <div className="md:col-span-2 space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Contact Number *</label>
@@ -1587,43 +1523,7 @@ function SubmitForm({
   );
 }
 
-function MapPicker({ lat, lng, onChange }: any) {
-  function LocationMarker() {
-    useMapEvents({
-      click(e) {
-        onChange(e.latlng.lat, e.latlng.lng);
-      },
-    });
-
-    return lat ? (
-      <>
-        <Marker position={[lat, lng]} />
-        <CircleMarker 
-          center={[lat, lng]} 
-          radius={12} 
-          pathOptions={{ fillColor: '#3b82f6', fillOpacity: 0.4, color: 'white', weight: 2 }} 
-        />
-        <CircleMarker 
-          center={[lat, lng]} 
-          radius={6} 
-          pathOptions={{ fillColor: '#3b82f6', fillOpacity: 1, color: 'white', weight: 2 }} 
-        />
-      </>
-    ) : null;
-  }
-
-  return (
-    <MapContainer center={[lat, lng]} zoom={13} style={{ height: '100%', width: '100%' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      <LocationMarker />
-    </MapContainer>
-  );
-}
-
-function ComplaintsList({ title, list, onSelect, showFilters, departments }: any) {
+function ComplaintsList({ title, list, onSelect, showFilters, departments, onBack }: any) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [dept, setDept] = useState('');
@@ -1638,6 +1538,15 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments }: any
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={onBack}
+          className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-xs uppercase tracking-widest"
+        >
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+      </div>
+
       <div className="page-header">
         <h1 className="text-4xl font-serif">{title}</h1>
       </div>
@@ -2302,9 +2211,15 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
       >
         <div className="p-8 overflow-y-auto">
           <div className="flex justify-between items-start mb-6">
-            <div>
-              <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted">{complaint.id}</span>
-              <h2 className="text-3xl font-serif mt-2">{complaint.description.substring(0, 50)}...</h2>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={onClose}
+                className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-[10px] uppercase tracking-widest mb-2"
+              >
+                <ArrowLeft size={14} /> Back to List
+              </button>
+              <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted w-fit">{complaint.id}</span>
+              <h2 className="text-3xl font-serif mt-1">{complaint.description.substring(0, 50)}...</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-cream rounded-full transition-colors">
               <X size={24} />
@@ -2343,35 +2258,6 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
               <div className="text-sm font-medium flex items-center gap-2"><Phone size={14} className="text-muted" /> {complaint.contact}</div>
             </div>
           </div>
-
-          {complaint.lat && complaint.lng && (
-            <div className="mb-8 space-y-2">
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center gap-1">
-                <Map size={12} /> Tagged Location
-              </div>
-              {complaint.gpsAddress && (
-                <div className="p-4 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-3 mb-4">
-                  <div className="w-8 h-8 bg-accent/10 rounded-full flex items-center justify-center shrink-0">
-                    <Navigation size={16} className="text-accent" />
-                  </div>
-                  <div className="space-y-1">
-                    {complaint.gpsAddress.split('\n').map((line: string, i: number) => (
-                      <div key={i} className={i === 0 ? "font-bold text-sm" : "text-muted"}>{line}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="h-48 rounded-2xl overflow-hidden border border-border">
-                <MapContainer center={[complaint.lat, complaint.lng]} zoom={15} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  />
-                  <Marker position={[complaint.lat, complaint.lng]} />
-                </MapContainer>
-              </div>
-            </div>
-          )}
 
           <div className="space-y-2 mb-8">
             <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Description</div>
