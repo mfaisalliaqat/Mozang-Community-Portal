@@ -176,6 +176,21 @@ async function startServer() {
     }
   });
 
+  app.patch("/api/users/:id", (req, res) => {
+    const { name, email, password, role, dept, deptName, avatar, color } = req.body;
+    try {
+      db.prepare(`
+        UPDATE users 
+        SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?
+        WHERE id = ?
+      `).run(name, email, password, role, dept, deptName, avatar, color, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Departments
   app.get("/api/departments", (req, res) => {
     try {

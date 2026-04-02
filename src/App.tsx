@@ -107,6 +107,9 @@ function App() {
   const [userPass, setUserPass] = useState('');
   const [userRole, setUserRole] = useState<Role>('resident');
   const [userDept, setUserDept] = useState('');
+  const [userAvatar, setUserAvatar] = useState('');
+  const [userColor, setUserColor] = useState('');
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   // Dept Management
   const [deptName, setDeptName] = useState('');
@@ -232,6 +235,41 @@ function App() {
       if (!res.ok) throw new Error('Failed to create user');
       showToast('User created');
       setUserName(''); setUserEmail(''); setUserPass('');
+      setUserAvatar(''); setUserColor('');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const updateUser = async () => {
+    if (!editingUserId || !userName || !userEmail || !userPass) {
+      showToast('Fill all fields');
+      return;
+    }
+    const updatedUser: User = {
+      id: editingUserId,
+      name: userName,
+      email: userEmail,
+      password: userPass,
+      role: userRole,
+      dept: userRole === 'officer' ? userDept : undefined,
+      deptName: userRole === 'officer' ? departments.find(d => d.id === userDept)?.name : undefined,
+      avatar: userAvatar || userName.split(' ').map(n => n[0]).join('').toUpperCase(),
+      color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16)
+    };
+    
+    try {
+      const res = await fetch(`/api/users/${editingUserId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUser)
+      });
+      if (!res.ok) throw new Error('Failed to update user');
+      showToast('User updated');
+      setUserName(''); setUserEmail(''); setUserPass('');
+      setUserAvatar(''); setUserColor('');
+      setEditingUserId(null);
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -810,8 +848,12 @@ function App() {
                   userPass={userPass} setUserPass={setUserPass}
                   userRole={userRole} setUserRole={setUserRole}
                   userDept={userDept} setUserDept={setUserDept}
+                  userAvatar={userAvatar} setUserAvatar={setUserAvatar}
+                  userColor={userColor} setUserColor={setUserColor}
+                  editingUserId={editingUserId} setEditingUserId={setEditingUserId}
                   departments={departments}
                   onAdd={addUser}
+                  onUpdate={updateUser}
                   onDelete={deleteUser}
                 />
               )}
@@ -1383,10 +1425,37 @@ function AdminUsersView({
   userPass, setUserPass, 
   userRole, setUserRole, 
   userDept, setUserDept, 
+  userAvatar, setUserAvatar,
+  userColor, setUserColor,
+  editingUserId, setEditingUserId,
   departments, 
   onAdd, 
+  onUpdate,
   onDelete 
 }: any) {
+  const handleEdit = (u: any) => {
+    setEditingUserId(u.id);
+    setUserName(u.name);
+    setUserEmail(u.email);
+    setUserPass(u.password);
+    setUserRole(u.role);
+    setUserDept(u.dept || '');
+    setUserAvatar(u.avatar || '');
+    setUserColor(u.color || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancel = () => {
+    setEditingUserId(null);
+    setUserName('');
+    setUserEmail('');
+    setUserPass('');
+    setUserRole('resident');
+    setUserDept('');
+    setUserAvatar('');
+    setUserColor('');
+  };
+
   return (
     <div className="space-y-8">
       <div className="page-header">
@@ -1395,7 +1464,7 @@ function AdminUsersView({
       </div>
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
-        <h3 className="font-bold">Add New User</h3>
+        <h3 className="font-bold">{editingUserId ? 'Edit User Profile' : 'Add New User'}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Full Name</label>
@@ -1418,7 +1487,7 @@ function AdminUsersView({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Initial Password</label>
+            <label className="text-xs font-semibold tracking-wide">Password (Visible to Admin)</label>
             <input 
               type="text" 
               value={userPass}
@@ -1454,13 +1523,59 @@ function AdminUsersView({
               </select>
             </div>
           )}
-          <div className="flex items-end">
-            <button 
-              onClick={onAdd}
-              className="w-full py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
-            >
-              Create User
-            </button>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Avatar Initials</label>
+            <input 
+              type="text" 
+              value={userAvatar}
+              onChange={(e) => setUserAvatar(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="JD"
+              maxLength={2}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Profile Color (Hex)</label>
+            <div className="flex gap-2">
+              <input 
+                type="color" 
+                value={userColor || '#000000'}
+                onChange={(e) => setUserColor(e.target.value)}
+                className="h-12 w-12 p-1 bg-paper border border-border rounded-lg outline-none cursor-pointer"
+              />
+              <input 
+                type="text" 
+                value={userColor}
+                onChange={(e) => setUserColor(e.target.value)}
+                className="flex-1 px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+                placeholder="#000000"
+              />
+            </div>
+          </div>
+          <div className="flex items-end gap-2">
+            {editingUserId ? (
+              <>
+                <button 
+                  onClick={onUpdate}
+                  className="flex-1 py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+                >
+                  Update User
+                </button>
+                <button 
+                  onClick={handleCancel}
+                  className="px-6 py-3.5 bg-cream text-ink rounded-xl font-bold hover:bg-border transition-all"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button 
+                onClick={onAdd}
+                className="w-full py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+              >
+                Create User
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1472,7 +1587,7 @@ function AdminUsersView({
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">User</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Role</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Department</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Actions</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -1504,15 +1619,25 @@ function AdminUsersView({
                 <td className="px-6 py-4 text-sm text-muted">
                   {u.deptName || '-'}
                 </td>
-                <td className="px-6 py-4">
-                  {u.id !== 'A001' && (
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end gap-2">
                     <button 
-                      onClick={() => onDelete(u.id)}
-                      className="p-2 text-muted hover:text-rose-500 transition-colors"
+                      onClick={() => handleEdit(u)}
+                      className="p-2 text-muted hover:text-accent transition-colors"
+                      title="Edit Profile"
                     >
-                      <X size={18} />
+                      <UserIcon size={18} />
                     </button>
-                  )}
+                    {u.id !== 'A001' && (
+                      <button 
+                        onClick={() => onDelete(u.id)}
+                        className="p-2 text-muted hover:text-rose-500 transition-colors"
+                        title="Delete User"
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
