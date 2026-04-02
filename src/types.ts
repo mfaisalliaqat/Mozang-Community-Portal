@@ -48,6 +48,7 @@ export interface Complaint {
   residentId: string;
   address: string;
   contact: string;
+  billReferenceNumber?: string;
   gpsAddress?: string;
   lat?: number;
   lng?: number;

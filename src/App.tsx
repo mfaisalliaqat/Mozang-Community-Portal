@@ -124,6 +124,7 @@ function App() {
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newBillRef, setNewBillRef] = useState('');
   const [newSuggestion, setNewSuggestion] = useState('');
 
   // User Management
@@ -471,6 +472,7 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
+      billReferenceNumber: newBillRef,
       timeline: [{ 
         time: today, 
         text: 'Complaint submitted by resident',
@@ -492,6 +494,7 @@ function App() {
       setNewAddress('');
       setNewContact('');
       setNewDesc('');
+      setNewBillRef('');
       setNewSubCategory('');
       fetchData();
     } catch (e) {
@@ -1035,6 +1038,7 @@ function App() {
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
+                  newBillRef={newBillRef} setNewBillRef={setNewBillRef}
                   onSubmit={submitComplaint}
                   onCancel={() => setCurrentPage('dashboard')}
                   departments={departments}
@@ -1576,6 +1580,12 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
           <Phone size={14} className="text-muted" />
           <span className="font-medium">{complaint.contact}</span>
         </div>
+        {complaint.billReferenceNumber && (
+          <div className="flex items-center gap-2 text-xs">
+            <ClipboardList size={14} className="text-muted" />
+            <span className="font-medium">Bill Ref: {complaint.billReferenceNumber}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-xs">
           <UserIcon size={14} className="text-muted" />
           <span className="font-medium">{complaint.resident}</span>
@@ -1604,11 +1614,13 @@ function SubmitForm({
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newDesc, setNewDesc, 
+  newBillRef, setNewBillRef,
   onSubmit, onCancel,
   departments,
   subCategories
 }: any) {
   const filteredSubs = subCategories.filter((s: any) => s.deptId === newCategory);
+  const showBillRef = ['water', 'electricity', 'gas'].includes(newCategory);
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -1680,6 +1692,20 @@ function SubmitForm({
               placeholder="Enter your contact number"
             />
           </div>
+
+          {showBillRef && (
+            <div className="md:col-span-2 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="text-xs font-semibold tracking-wide">Bill Reference Number (Optional)</label>
+              <input 
+                type="text" 
+                value={newBillRef}
+                onChange={(e) => setNewBillRef(e.target.value)}
+                className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+                placeholder="Enter your bill reference number"
+              />
+            </div>
+          )}
+
           <div className="md:col-span-2 space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">Description *</label>
             <textarea 
@@ -2495,6 +2521,12 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Contact</div>
               <div className="text-sm font-medium flex items-center gap-2"><Phone size={14} className="text-muted" /> {complaint.contact}</div>
             </div>
+            {complaint.billReferenceNumber && (
+              <div>
+                <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Bill Ref</div>
+                <div className="text-sm font-medium flex items-center gap-2"><ClipboardList size={14} className="text-muted" /> {complaint.billReferenceNumber}</div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 mb-8">

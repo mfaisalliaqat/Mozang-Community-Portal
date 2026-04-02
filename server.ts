@@ -60,6 +60,7 @@ try {
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
       contact TEXT NOT NULL,
+      billReferenceNumber TEXT,
       gpsAddress TEXT,
       lat REAL,
       lng REAL
@@ -108,6 +109,7 @@ try {
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
   try { db.prepare("ALTER TABLE complaints ADD COLUMN resolvedAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN billReferenceNumber TEXT").run(); } catch (e) {}
   try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
@@ -344,13 +346,13 @@ async function startServer() {
   });
 
   app.post("/api/complaints", (req, res) => {
-    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng, timeline } = req.body;
+    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng, timeline } = req.body;
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
-          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng);
+          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng);
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {
