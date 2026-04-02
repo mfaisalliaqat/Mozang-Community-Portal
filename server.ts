@@ -55,6 +55,7 @@ try {
       status TEXT NOT NULL,
       priority TEXT NOT NULL,
       date TEXT NOT NULL,
+      resolvedAt TEXT,
       resident TEXT NOT NULL,
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
@@ -62,6 +63,14 @@ try {
       gpsAddress TEXT,
       lat REAL,
       lng REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      userName TEXT NOT NULL,
+      description TEXT NOT NULL,
+      date TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS timeline (
@@ -98,6 +107,7 @@ try {
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lat REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN resolvedAt TEXT").run(); } catch (e) {}
   try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
@@ -166,6 +176,24 @@ async function startServer() {
   });
 
   // --- API ROUTES ---
+
+  // Suggestions
+  app.get("/api/suggestions", (req, res) => {
+    const list = db.prepare("SELECT * FROM suggestions ORDER BY date DESC").all();
+    res.json(list);
+  });
+
+  app.post("/api/suggestions", (req, res) => {
+    const { id, userId, userName, description, date } = req.body;
+    db.prepare("INSERT INTO suggestions (id, userId, userName, description, date) VALUES (?, ?, ?, ?, ?)")
+      .run(id, userId, userName, description, date);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/suggestions/:id", (req, res) => {
+    db.prepare("DELETE FROM suggestions WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
 
   // Users
   app.get("/api/users", (req, res) => {
@@ -338,11 +366,19 @@ async function startServer() {
   });
 
   app.patch("/api/complaints/:id", (req, res) => {
-    const { status, timelineEntry } = req.body;
+    const { status, priority, timelineEntry } = req.body;
     try {
       const update = db.transaction(() => {
         if (status) {
-          db.prepare("UPDATE complaints SET status = ? WHERE id = ?").run(status, req.params.id);
+          if (status === 'resolved') {
+            db.prepare("UPDATE complaints SET status = ?, resolvedAt = ? WHERE id = ?")
+              .run(status, new Date().toISOString().split('T')[0], req.params.id);
+          } else {
+            db.prepare("UPDATE complaints SET status = ? WHERE id = ?").run(status, req.params.id);
+          }
+        }
+        if (priority) {
+          db.prepare("UPDATE complaints SET priority = ? WHERE id = ?").run(priority, req.params.id);
         }
         if (timelineEntry) {
           db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)")

@@ -23,8 +23,18 @@ import {
   Facebook,
   Users2,
   Menu,
-  ArrowLeft
+  ArrowLeft,
+  Lightbulb,
+  BarChart3,
+  PieChart as PieChartIcon,
+  TrendingUp,
+  Clock
 } from 'lucide-react';
+import { 
+  PieChart, Pie, Cell, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, AreaChart, Area
+} from 'recharts';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
@@ -96,6 +106,7 @@ function App() {
   });
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
@@ -113,6 +124,7 @@ function App() {
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newSuggestion, setNewSuggestion] = useState('');
 
   // User Management
   const [userName, setUserName] = useState('');
@@ -181,6 +193,7 @@ function App() {
         { name: 'subcategories', url: '/api/subcategories' },
         { name: 'complaints', url: '/api/complaints' },
         { name: 'announcements', url: '/api/announcements' },
+        { name: 'suggestions', url: '/api/suggestions' },
         { name: 'settings', url: '/api/settings' }
       ];
 
@@ -198,7 +211,7 @@ function App() {
         return res.json();
       }));
 
-      const [uList, dList, subList, cList, aList, sList] = results;
+      const [uList, dList, subList, cList, aList, sugList, sList] = results;
 
       console.log('Data fetched successfully:', {
         users: uList.length,
@@ -206,6 +219,7 @@ function App() {
         subs: subList.length,
         complaints: cList.length,
         announcements: aList.length,
+        suggestions: sugList.length,
         settings: Object.keys(sList).length
       });
 
@@ -214,6 +228,7 @@ function App() {
       setSubCategories(subList);
       setComplaints(cList);
       setAnnouncements(aList);
+      setSuggestions(sugList);
       setSettings(sList);
 
       if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
@@ -536,6 +551,48 @@ function App() {
     }
   };
 
+  const submitSuggestion = async () => {
+    if (!newSuggestion.trim()) {
+      showToast('Please enter your suggestion.');
+      return;
+    }
+    const id = `SUG-${String(Date.now()).slice(-6)}`;
+    const today = new Date().toISOString().split('T')[0];
+    const suggestion = {
+      id,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      description: newSuggestion,
+      date: today
+    };
+
+    try {
+      const res = await fetch('/api/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(suggestion)
+      });
+      if (!res.ok) throw new Error('Failed to submit suggestion');
+      showToast('Suggestion submitted successfully!');
+      setNewSuggestion('');
+      setCurrentPage('dashboard');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteSuggestion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/suggestions/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete suggestion');
+      showToast('Suggestion removed.');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
   const postAnnouncement = async () => {
     if (!annTitle || !annBody) {
       showToast('Please fill in all fields.');
@@ -736,6 +793,7 @@ function App() {
                     type="password" 
                     value={loginPass}
                     onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                     className="w-full pl-12 pr-4 py-4 bg-white border border-border rounded-2xl outline-none focus:border-accent transition-all shadow-sm focus:shadow-lg focus:shadow-accent/5"
                     placeholder="••••••••"
                   />
@@ -816,6 +874,12 @@ function App() {
                   active={currentPage === 'dashboard'} 
                   onClick={() => { setCurrentPage('dashboard'); setShowMobileMenu(false); }} 
                 />
+                <SidebarItem 
+                  icon={<BarChart3 size={18} />} 
+                  label="Insights" 
+                  active={currentPage === 'insights'} 
+                  onClick={() => { setCurrentPage('insights'); setShowMobileMenu(false); }} 
+                />
                 {currentUser.role === 'resident' && (
                   <>
                     <SidebarItem 
@@ -823,6 +887,12 @@ function App() {
                       label="Submit Complaint" 
                       active={currentPage === 'submit'} 
                       onClick={() => { setCurrentPage('submit'); setShowMobileMenu(false); }} 
+                    />
+                    <SidebarItem 
+                      icon={<Lightbulb size={18} />} 
+                      label="Submit Suggestion" 
+                      active={currentPage === 'submit-suggestion'} 
+                      onClick={() => { setCurrentPage('submit-suggestion'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
                       icon={<ClipboardList size={18} />} 
@@ -835,6 +905,12 @@ function App() {
                 )}
                 {currentUser.role === 'officer' && (
                   <>
+                    <SidebarItem 
+                      icon={<Lightbulb size={18} />} 
+                      label="Submit Suggestion" 
+                      active={currentPage === 'submit-suggestion'} 
+                      onClick={() => { setCurrentPage('submit-suggestion'); setShowMobileMenu(false); }} 
+                    />
                     <SidebarItem 
                       icon={<ClipboardList size={18} />} 
                       label="Assigned" 
@@ -852,6 +928,13 @@ function App() {
                 )}
                 {currentUser.role === 'admin' && (
                   <>
+                    <SidebarItem 
+                      icon={<Lightbulb size={18} />} 
+                      label="Suggestions" 
+                      active={currentPage === 'manage-suggestions'} 
+                      onClick={() => { setCurrentPage('manage-suggestions'); setShowMobileMenu(false); }} 
+                      count={suggestions.length}
+                    />
                     <SidebarItem 
                       icon={<ClipboardList size={18} />} 
                       label="All Complaints" 
@@ -946,6 +1029,28 @@ function App() {
                   onCancel={() => setCurrentPage('dashboard')}
                   departments={departments}
                   subCategories={subCategories}
+                />
+              )}
+              {currentPage === 'submit-suggestion' && (
+                <SubmitSuggestionForm 
+                  newSuggestion={newSuggestion} 
+                  setNewSuggestion={setNewSuggestion}
+                  onSubmit={submitSuggestion}
+                  onCancel={() => setCurrentPage('dashboard')}
+                />
+              )}
+              {currentPage === 'manage-suggestions' && (
+                <SuggestionsList 
+                  suggestions={suggestions}
+                  onDelete={deleteSuggestion}
+                />
+              )}
+              {currentPage === 'insights' && (
+                <InsightsView 
+                  user={currentUser}
+                  complaints={complaints}
+                  departments={departments}
+                  users={users}
                 />
               )}
               {currentPage === 'my-complaints' && (
@@ -2366,5 +2471,292 @@ function StatusButton({ active, onClick, label, isSuccess, isDanger }: any) {
     >
       {label}
     </button>
+  );
+}
+
+function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCancel }: any) {
+  return (
+    <div className="max-w-3xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <button 
+          onClick={onCancel}
+          className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-xs uppercase tracking-widest"
+        >
+          <ArrowLeft size={16} /> Back to Dashboard
+        </button>
+      </div>
+
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Submit a Suggestion</h1>
+        <p className="text-muted mt-1">Help us improve the Mozang Community Portal with your ideas.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold tracking-wide">Your Suggestion</label>
+          <textarea 
+            value={newSuggestion}
+            onChange={(e) => setNewSuggestion(e.target.value)}
+            className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors min-h-[200px] resize-none"
+            placeholder="Describe your suggestion here..."
+          />
+        </div>
+        <button 
+          onClick={onSubmit}
+          className="w-full py-4 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+        >
+          Submit Suggestion
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SuggestionsList({ suggestions, onDelete }: any) {
+  return (
+    <div className="max-w-3xl mx-auto space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Community Suggestions</h1>
+        <p className="text-muted mt-1">Review ideas and feedback from residents and officers.</p>
+      </div>
+
+      <div className="space-y-4">
+        {suggestions.length === 0 ? (
+          <div className="bg-white border border-border rounded-2xl p-12 text-center">
+            <div className="text-4xl mb-4">💡</div>
+            <h3 className="text-xl font-serif mb-2">No suggestions yet</h3>
+            <p className="text-muted">New suggestions will appear here.</p>
+          </div>
+        ) : (
+          suggestions.map((s: any) => (
+            <div key={s.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex justify-between items-start gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.userName}</span>
+                  <span className="text-[10px] text-muted">•</span>
+                  <span className="text-[10px] text-muted">{s.date}</span>
+                </div>
+                <p className="text-ink leading-relaxed">{s.description}</p>
+              </div>
+              <button 
+                onClick={() => onDelete(s.id)}
+                className="p-2 text-muted hover:text-rose-500 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InsightsView({ user, complaints, departments, users }: any) {
+  const role = user.role;
+  
+  // Data processing
+  const statusData = [
+    { name: 'Pending', value: complaints.filter((c: any) => c.status === 'pending').length, color: '#f59e0b' },
+    { name: 'In Progress', value: complaints.filter((c: any) => c.status === 'in-progress').length, color: '#3b82f6' },
+    { name: 'Resolved', value: complaints.filter((c: any) => c.status === 'resolved').length, color: '#10b981' },
+  ];
+
+  const categoryData = departments.map((d: any) => ({
+    name: d.name.split(' ')[0],
+    count: complaints.filter((c: any) => c.category === d.id).length
+  }));
+
+  const priorityData = [
+    { name: 'High', value: complaints.filter((c: any) => c.priority === 'high').length, color: '#ef4444' },
+    { name: 'Medium', value: complaints.filter((c: any) => c.priority === 'medium').length, color: '#f59e0b' },
+    { name: 'Low', value: complaints.filter((c: any) => c.priority === 'low').length, color: '#10b981' },
+  ];
+
+  // Mock data for trends (since we don't have historical data yet)
+  const trendData = [
+    { name: 'Week 1', complaints: 4, resolved: 2 },
+    { name: 'Week 2', complaints: 7, resolved: 5 },
+    { name: 'Week 3', complaints: 5, resolved: 4 },
+    { name: 'Week 4', complaints: 9, resolved: 7 },
+  ];
+
+  const resolutionTimeData = [
+    { name: 'Jan', time: 4.5 },
+    { name: 'Feb', time: 3.8 },
+    { name: 'Mar', time: 3.2 },
+    { name: 'Apr', time: 2.5 },
+  ];
+
+  const deptPerformance = departments.map((d: any) => {
+    const total = complaints.filter((c: any) => c.category === d.id).length;
+    const resolved = complaints.filter((c: any) => c.category === d.id && c.status === 'resolved').length;
+    const rate = total === 0 ? 0 : Math.round((resolved / total) * 100);
+    return { name: d.name.split(' ')[0], rate };
+  });
+
+  return (
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Graphical Insights</h1>
+        <p className="text-muted mt-1">Visualizing community data and performance metrics.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Common Charts */}
+        <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+          <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+            <PieChartIcon size={20} className="text-accent" />
+            Complaint Status Overview
+          </h3>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+          <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+            <TrendingUp size={20} className="text-accent" />
+            Complaints Over Time
+          </h3>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <YAxis axisLine={false} tickLine={false} />
+                <Tooltip />
+                <Area type="monotone" dataKey="complaints" stroke="#c8502a" fill="#c8502a" fillOpacity={0.1} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {role === 'resident' && (
+          <div className="bg-white border border-border rounded-2xl p-8 shadow-sm lg:col-span-2">
+            <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+              <BarChart3 size={20} className="text-accent" />
+              Category-wise Complaints
+            </h3>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#c8502a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {role === 'officer' && (
+          <>
+            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+                <Clock size={20} className="text-accent" />
+                Average Resolution Time (Days)
+              </h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={resolutionTimeData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="time" stroke="#3b82f6" strokeWidth={3} dot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+                <ShieldAlert size={20} className="text-accent" />
+                Priority-wise Complaints
+              </h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={priorityData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      label
+                    >
+                      {priorityData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </>
+        )}
+
+        {role === 'admin' && (
+          <>
+            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+                <Users2 size={20} className="text-accent" />
+                System Usage (Active Users)
+              </h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="complaints" stroke="#c8502a" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+                <LayoutDashboard size={20} className="text-accent" />
+                Department Performance (%)
+              </h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={deptPerformance}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} />
+                    <Tooltip />
+                    <Bar dataKey="rate" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
