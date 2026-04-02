@@ -69,3 +69,12 @@ export interface Announcement {
   text: string;
   date: string;
 }
+
+export interface Suggestion {
+  id: string;
+  userId: string;
+  userName: string;
+  description: string;
+  date: string;
+  status: 'pending' | 'acknowledged';
+}

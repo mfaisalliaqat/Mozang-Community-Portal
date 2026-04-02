@@ -184,6 +184,19 @@ function App() {
     localStorage.setItem('mozang_page', currentPage);
   }, [currentPage]);
 
+  // Notification for acknowledged suggestions
+  useEffect(() => {
+    if (currentUser && suggestions.length > 0) {
+      const myAcknowledged = suggestions.filter(s => s.userId === currentUser.id && s.status === 'acknowledged');
+      const lastSeenAckCount = parseInt(localStorage.getItem(`mozang_ack_count_${currentUser.id}`) || '0');
+      
+      if (myAcknowledged.length > lastSeenAckCount) {
+        showToast('One of your suggestions has been acknowledged by the admin!');
+        localStorage.setItem(`mozang_ack_count_${currentUser.id}`, myAcknowledged.length.toString());
+      }
+    }
+  }, [suggestions, currentUser]);
+
   // --- DATA FETCHING ---
   const fetchData = async () => {
     console.log('Fetching data from API...');
@@ -596,6 +609,21 @@ function App() {
       const res = await fetch(`/api/suggestions/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete suggestion');
       showToast('Suggestion removed.');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const acknowledgeSuggestion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/suggestions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'acknowledged' })
+      });
+      if (!res.ok) throw new Error('Failed to acknowledge suggestion');
+      showToast('Suggestion acknowledged');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -1051,12 +1079,16 @@ function App() {
                   setNewSuggestion={setNewSuggestion}
                   onSubmit={submitSuggestion}
                   onCancel={() => setCurrentPage('dashboard')}
+                  mySuggestions={suggestions.filter((s: any) => s.userId === currentUser?.id)}
+                  onDelete={deleteSuggestion}
                 />
               )}
               {currentPage === 'manage-suggestions' && (
                 <SuggestionsList 
                   suggestions={suggestions}
                   onDelete={deleteSuggestion}
+                  onAcknowledge={acknowledgeSuggestion}
+                  userRole={currentUser?.role}
                 />
               )}
               {currentPage === 'insights' && (
@@ -1571,7 +1603,7 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
         </div>
       </div>
 
-      <div className="pt-4 border-t border-border space-y-3">
+      <div className={`pt-4 border-t border-border space-y-3 ${isScreenshot ? 'bg-cream/30 -mx-6 px-6 pb-6' : ''}`}>
         <div className="flex items-center gap-2 text-xs">
           <MapPin size={14} className="text-muted" />
           <span className="font-medium">{complaint.address}</span>
@@ -1591,7 +1623,7 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
           <span className="font-medium">{complaint.resident}</span>
         </div>
         {isScreenshot && (
-          <div className="bg-cream p-4 rounded-xl text-sm leading-relaxed italic text-ink mt-2">
+          <div className="bg-white p-4 rounded-xl text-sm leading-relaxed italic text-ink mt-2 border border-border/50">
             {complaint.description}
           </div>
         )}
@@ -2636,7 +2668,7 @@ function StatusButton({ active, onClick, label, isSuccess, isDanger }: any) {
   );
 }
 
-function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCancel }: any) {
+function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCancel, mySuggestions, onDelete }: any) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -2670,11 +2702,39 @@ function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCan
           Submit Suggestion
         </button>
       </div>
+
+      {mySuggestions && mySuggestions.length > 0 && (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-serif">My Suggestions</h2>
+          <div className="space-y-4">
+            {mySuggestions.map((s: any) => (
+              <div key={s.id} className="bg-white border border-border p-6 rounded-2xl flex justify-between items-start gap-4 shadow-sm group">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.date}</span>
+                    <span className="text-[10px] text-muted">•</span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${s.status === 'acknowledged' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                      {s.status}
+                    </span>
+                  </div>
+                  <p className="text-ink leading-relaxed">{s.description}</p>
+                </div>
+                <button 
+                  onClick={() => onDelete(s.id)}
+                  className="p-2 text-muted hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function SuggestionsList({ suggestions, onDelete }: any) {
+function SuggestionsList({ suggestions, onDelete, onAcknowledge, userRole }: any) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="page-header">
@@ -2691,21 +2751,34 @@ function SuggestionsList({ suggestions, onDelete }: any) {
           </div>
         ) : (
           suggestions.map((s: any) => (
-            <div key={s.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex justify-between items-start gap-4">
+            <div key={s.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex justify-between items-start gap-4 group">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.userName}</span>
                   <span className="text-[10px] text-muted">•</span>
                   <span className="text-[10px] text-muted">{s.date}</span>
+                  <span className={`ml-2 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${s.status === 'acknowledged' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                    {s.status}
+                  </span>
                 </div>
                 <p className="text-ink leading-relaxed">{s.description}</p>
               </div>
-              <button 
-                onClick={() => onDelete(s.id)}
-                className="p-2 text-muted hover:text-rose-500 transition-colors"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                {userRole === 'admin' && s.status === 'pending' && (
+                  <button 
+                    onClick={() => onAcknowledge(s.id)}
+                    className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-colors"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+                <button 
+                  onClick={() => onDelete(s.id)}
+                  className="p-2 text-muted hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
           ))
         )}

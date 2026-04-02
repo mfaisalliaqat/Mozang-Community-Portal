@@ -71,7 +71,8 @@ try {
       userId TEXT NOT NULL,
       userName TEXT NOT NULL,
       description TEXT NOT NULL,
-      date TEXT NOT NULL
+      date TEXT NOT NULL,
+      status TEXT DEFAULT 'pending'
     );
 
     CREATE TABLE IF NOT EXISTS timeline (
@@ -110,6 +111,7 @@ try {
 
   try { db.prepare("ALTER TABLE complaints ADD COLUMN resolvedAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN billReferenceNumber TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE suggestions ADD COLUMN status TEXT DEFAULT 'pending'").run(); } catch (e) {}
   try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
@@ -186,10 +188,21 @@ async function startServer() {
   });
 
   app.post("/api/suggestions", (req, res) => {
-    const { id, userId, userName, description, date } = req.body;
-    db.prepare("INSERT INTO suggestions (id, userId, userName, description, date) VALUES (?, ?, ?, ?, ?)")
-      .run(id, userId, userName, description, date);
+    const { id, userId, userName, description, date, status } = req.body;
+    db.prepare("INSERT INTO suggestions (id, userId, userName, description, date, status) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, userId, userName, description, date, status || 'pending');
     res.json({ success: true });
+  });
+
+  app.patch("/api/suggestions/:id", (req, res) => {
+    const { status } = req.body;
+    try {
+      db.prepare("UPDATE suggestions SET status = ? WHERE id = ?").run(status, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating suggestion:', error);
+      res.status(400).json({ error: error.message });
+    }
   });
 
   app.delete("/api/suggestions/:id", (req, res) => {
