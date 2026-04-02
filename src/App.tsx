@@ -611,8 +611,8 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-3 text-2xl font-serif text-white relative z-10"
           >
-            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30">
-              <Building2 size={24} className="text-white" />
+            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30 text-white font-bold text-sm">
+              MCP
             </div>
             <span>Mozang <span className="text-accent">Community Portal</span></span>
           </motion.div>
@@ -766,8 +766,11 @@ function App() {
           >
             {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
           </button>
-          <div className="text-xl font-serif text-white">
-            Mozang <span className="text-accent">Community Portal</span>
+          <div className="flex items-center gap-3 text-xl font-serif text-white">
+            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-[10px] shadow-lg shadow-accent/20">
+              MCP
+            </div>
+            <span>Mozang <span className="text-accent">Community Portal</span></span>
           </div>
         </div>
         
