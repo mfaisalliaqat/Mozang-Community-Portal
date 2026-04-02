@@ -22,6 +22,7 @@ import {
   Phone,
   Facebook,
   Map,
+  Navigation,
   Users2
 } from 'lucide-react';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
@@ -122,6 +123,7 @@ function App() {
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newGpsAddress, setNewGpsAddress] = useState('');
   const [newLat, setNewLat] = useState<number | null>(null);
   const [newLng, setNewLng] = useState<number | null>(null);
 
@@ -461,6 +463,7 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
+      gpsAddress: newGpsAddress || undefined,
       lat: newLat || undefined,
       lng: newLng || undefined,
       timeline: [{ 
@@ -485,6 +488,7 @@ function App() {
       setNewContact('');
       setNewDesc('');
       setNewSubCategory('');
+      setNewGpsAddress('');
       setNewLat(null);
       setNewLng(null);
       fetchData();
@@ -933,6 +937,7 @@ function App() {
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newDesc={newDesc} setNewDesc={setNewDesc}
+                  newGpsAddress={newGpsAddress} setNewGpsAddress={setNewGpsAddress}
                   newLat={newLat} setNewLat={setNewLat}
                   newLng={newLng} setNewLng={setNewLng}
                   onSubmit={submitComplaint}
@@ -1376,6 +1381,7 @@ function SubmitForm({
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newDesc, setNewDesc, 
+  newGpsAddress, setNewGpsAddress,
   newLat, setNewLat,
   newLng, setNewLng,
   onSubmit, onCancel,
@@ -1383,7 +1389,48 @@ function SubmitForm({
   subCategories
 }: any) {
   const [showMap, setShowMap] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const filteredSubs = subCategories.filter((s: any) => s.deptId === newCategory);
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      if (data.display_name) {
+        setNewGpsAddress(data.display_name);
+      }
+    } catch (e) {
+      console.error('Reverse geocoding failed', e);
+    }
+  };
+
+  const handleLocationChange = (lat: number, lng: number) => {
+    setNewLat(lat);
+    setNewLng(lng);
+    reverseGeocode(lat, lng);
+  };
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        handleLocationChange(latitude, longitude);
+        setIsLocating(false);
+        setShowMap(true);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        alert('Unable to retrieve your location. Please check permissions.');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -1425,12 +1472,22 @@ function SubmitForm({
           <div className="md:col-span-2 space-y-1.5">
             <label className="text-xs font-semibold tracking-wide flex justify-between items-center">
               Complete Address *
-              <button 
-                onClick={() => setShowMap(!showMap)}
-                className="text-accent hover:underline flex items-center gap-1"
-              >
-                <Map size={14} /> {newLat ? 'Change Location Pin' : 'Tag Location on Map'}
-              </button>
+              <div className="flex gap-4">
+                <button 
+                  onClick={useCurrentLocation}
+                  disabled={isLocating}
+                  className="text-accent hover:underline flex items-center gap-1 disabled:opacity-50"
+                >
+                  <Navigation size={14} className={isLocating ? 'animate-pulse' : ''} /> 
+                  {isLocating ? 'Locating...' : 'Use My Current Location'}
+                </button>
+                <button 
+                  onClick={() => setShowMap(!showMap)}
+                  className="text-accent hover:underline flex items-center gap-1"
+                >
+                  <Map size={14} /> {newLat ? 'Change Location Pin' : 'Tag Location on Map'}
+                </button>
+              </div>
             </label>
             <div className="relative">
               <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
@@ -1442,9 +1499,18 @@ function SubmitForm({
                 placeholder="Enter your complete address"
               />
             </div>
+            {newGpsAddress && (
+              <div className="space-y-1.5 mt-4 animate-in fade-in slide-in-from-top-2">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Detected Location (GPS Address)</label>
+                <div className="p-3 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-2">
+                  <CheckCircle2 size={14} className="text-green mt-0.5 shrink-0" />
+                  <span>{newGpsAddress}</span>
+                </div>
+              </div>
+            )}
             {newLat && (
               <div className="text-[10px] text-green font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
-                <CheckCircle2 size={12} /> Location Tagged ({newLat.toFixed(4)}, {newLng.toFixed(4)})
+                <CheckCircle2 size={12} /> Coordinates: {newLat.toFixed(6)}, {newLng.toFixed(6)}
               </div>
             )}
           </div>
@@ -1460,10 +1526,7 @@ function SubmitForm({
                 <MapPicker 
                   lat={newLat || 31.5204} 
                   lng={newLng || 74.3587} 
-                  onChange={(lat: number, lng: number) => {
-                    setNewLat(lat);
-                    setNewLng(lng);
-                  }} 
+                  onChange={handleLocationChange} 
                 />
               </motion.div>
             )}
@@ -2259,6 +2322,12 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center gap-1">
                 <Map size={12} /> Tagged Location
               </div>
+              {complaint.gpsAddress && (
+                <div className="p-3 bg-cream rounded-xl border border-border text-xs text-ink flex items-start gap-2 mb-2">
+                  <Navigation size={14} className="text-accent mt-0.5 shrink-0" />
+                  <span>{complaint.gpsAddress}</span>
+                </div>
+              )}
               <div className="h-48 rounded-2xl overflow-hidden border border-border">
                 <MapContainer center={[complaint.lat, complaint.lng]} zoom={15} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
                   <TileLayer

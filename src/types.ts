@@ -48,6 +48,7 @@ export interface Complaint {
   residentId: string;
   address: string;
   contact: string;
+  gpsAddress?: string;
   lat?: number;
   lng?: number;
   timeline: TimelineItem[];

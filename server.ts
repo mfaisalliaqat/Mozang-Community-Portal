@@ -59,6 +59,7 @@ try {
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
       contact TEXT NOT NULL,
+      gpsAddress TEXT,
       lat REAL,
       lng REAL
     );
@@ -93,6 +94,7 @@ try {
   try { db.prepare("ALTER TABLE users ADD COLUMN address TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN contact TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN subcategory TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN gpsAddress TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lat REAL").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
@@ -313,13 +315,13 @@ async function startServer() {
   });
 
   app.post("/api/complaints", (req, res) => {
-    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng, timeline } = req.body;
+    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng, timeline } = req.body;
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
-          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, lat, lng);
+          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, gpsAddress, lat, lng);
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {
