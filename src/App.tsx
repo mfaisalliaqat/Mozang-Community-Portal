@@ -36,7 +36,15 @@ import {
   Database,
   RefreshCw,
   Share,
-  Plus
+  Plus,
+  Zap,
+  Flame,
+  Droplets,
+  Truck,
+  Send,
+  Trash2,
+  Share2,
+  CheckCircle
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, 
@@ -102,6 +110,47 @@ function App() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [analyticsStats, setAnalyticsStats] = useState<any>(null);
+  const [emergencies, setEmergencies] = useState<any[]>([]);
+  const [sessionId] = useState(() => {
+    const saved = sessionStorage.getItem('mozang_session_id');
+    if (saved) return saved;
+    const newId = Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('mozang_session_id', newId);
+    return newId;
+  });
+
+  const trackEvent = async (type: string, data: any = {}) => {
+    const userAgent = window.navigator.userAgent;
+    const device = /mobile/i.test(userAgent) ? 'mobile' : 'desktop';
+    const browser = /chrome/i.test(userAgent) ? 'chrome' : /safari/i.test(userAgent) ? 'safari' : /firefox/i.test(userAgent) ? 'firefox' : 'other';
+    const os = /android/i.test(userAgent) ? 'android' : /iphone|ipad|ipod/i.test(userAgent) ? 'ios' : /windows/i.test(userAgent) ? 'windows' : /mac/i.test(userAgent) ? 'macos' : 'other';
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const source = urlParams.get('utm_source') || urlParams.get('source') || 'direct';
+
+    try {
+      await fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          userId: currentUser?.id,
+          sessionId,
+          path: window.location.pathname + window.location.hash,
+          source,
+          device,
+          browser,
+          os,
+          location: currentUser?.area,
+          timestamp: new Date().toISOString(),
+          ...data
+        })
+      });
+    } catch (e) {
+      console.error('Tracking failed', e);
+    }
+  };
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -164,6 +213,15 @@ function App() {
   const [currentPage, setCurrentPage] = useState(() => {
     return localStorage.getItem('mozang_page') || 'dashboard';
   });
+
+  useEffect(() => {
+    trackEvent('page_view');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('utm_source') || urlParams.has('source')) {
+      trackEvent('link_click');
+    }
+  }, [currentPage]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -283,8 +341,13 @@ function App() {
         { name: 'announcements', url: '/api/announcements' },
         { name: 'suggestions', url: '/api/suggestions' },
         { name: 'settings', url: '/api/settings' },
-        { name: 'areas', url: '/api/areas' }
+        { name: 'areas', url: '/api/areas' },
+        { name: 'emergencies', url: '/api/emergencies' }
       ];
+
+      if (currentUser?.role === 'admin') {
+        endpoints.push({ name: 'analytics', url: '/api/analytics/stats' });
+      }
 
       const results = await Promise.all(endpoints.map(async (e) => {
         const res = await fetch(e.url);
@@ -300,7 +363,7 @@ function App() {
         return res.json();
       }));
 
-      const [uList, dList, subList, cList, aList, sugList, sList, areaList] = results;
+      const [uList, dList, subList, cList, aList, sugList, sList, areaList, eList, stats] = results;
 
       console.log('Data fetched successfully:', {
         users: uList.length,
@@ -310,7 +373,8 @@ function App() {
         announcements: aList.length,
         suggestions: sugList.length,
         settings: Object.keys(sList).length,
-        areas: areaList.length
+        areas: areaList.length,
+        emergencies: eList?.length || 0
       });
 
       setUsers(uList);
@@ -321,6 +385,8 @@ function App() {
       setSuggestions(sugList);
       setSettings(sList);
       setAreas(areaList);
+      setEmergencies(eList || []);
+      if (stats) setAnalyticsStats(stats);
 
       if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
     } catch (error) {
@@ -365,6 +431,8 @@ function App() {
     
     console.log('Login successful:', u.name);
     setCurrentUser(u);
+    localStorage.setItem('mozang_user', JSON.stringify(u));
+    trackEvent('login');
     setCurrentPage('dashboard');
   };
 
@@ -830,6 +898,63 @@ function App() {
     }
   };
 
+  const reportEmergency = async (type: string) => {
+    if (!currentUser) return;
+    
+    const id = 'E' + Math.random().toString(36).substring(2, 9).toUpperCase();
+    const emergency = {
+      id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userContact: currentUser.contact,
+      area: currentUser.area,
+      type,
+      description: `Emergency ${type} reported by ${currentUser.name} in ${currentUser.area}`,
+      timestamp: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    try {
+      const res = await fetch('/api/emergencies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emergency)
+      });
+      if (!res.ok) throw new Error('Failed to report emergency');
+      showToast(`Emergency ${type} reported successfully!`);
+      trackEvent('emergency_report', { emergencyType: type });
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const updateEmergencyStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`/api/emergencies/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update emergency');
+      showToast('Emergency status updated');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteEmergency = async (id: string) => {
+    try {
+      const res = await fetch(`/api/emergencies/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete emergency');
+      showToast('Emergency record removed');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
   const deleteAnnouncement = async (id: string) => {
     try {
       const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
@@ -1284,6 +1409,22 @@ function App() {
                       active={currentPage === (currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
                       onClick={() => { setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements'); setShowMobileMenu(false); }} 
                     />
+                    {currentUser.role === 'admin' && (
+                      <>
+                        <SidebarItem 
+                          icon={<BarChart3 size={18} />} 
+                          label="Advanced Analytics" 
+                          active={currentPage === 'advanced-analytics'} 
+                          onClick={() => { setCurrentPage('advanced-analytics'); setShowMobileMenu(false); }} 
+                        />
+                        <SidebarItem 
+                          icon={<ShieldAlert size={18} />} 
+                          label="Manage Emergencies" 
+                          active={currentPage === 'emergencies-admin'} 
+                          onClick={() => { setCurrentPage('emergencies-admin'); setShowMobileMenu(false); }} 
+                        />
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -1412,6 +1553,7 @@ function App() {
                   onNavigate={setCurrentPage}
                   onSelectComplaint={setSelectedComplaint}
                   departments={departments}
+                  onReportEmergency={reportEmergency}
                 />
               )}
               {currentPage === 'submit' && (
@@ -1576,6 +1718,20 @@ function App() {
                   onDelete={deleteAnnouncement}
                 />
               )}
+              {currentPage === 'emergencies-admin' && (
+                <EmergenciesAdmin 
+                  emergencies={emergencies}
+                  onUpdateStatus={updateEmergencyStatus}
+                  onDelete={deleteEmergency}
+                />
+              )}
+              {currentPage === 'advanced-analytics' && (
+                <AdvancedAnalytics 
+                  stats={analyticsStats}
+                  complaints={complaints}
+                  users={users}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -1703,7 +1859,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
   );
 }
 
-function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments }: any) {
+function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency }: any) {
   const r = user.role;
   
   const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
@@ -1724,6 +1880,45 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
             <PlusCircle size={18} /> New Complaint
           </button>
         </div>
+
+        {/* Emergency Section */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-red-50 border-2 border-red-200 rounded-3xl p-6 shadow-xl shadow-red-100"
+        >
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-red-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-red-200 animate-pulse">
+                <ShieldAlert size={28} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-red-900">Emergency Reporting</h2>
+                <p className="text-red-700 text-sm">Immediate issues? Click a button below to alert the authorities.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3 w-full md:w-auto">
+              <button 
+                onClick={() => onReportEmergency('Electricity')}
+                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <Zap size={18} /> Electricity
+              </button>
+              <button 
+                onClick={() => onReportEmergency('Gas')}
+                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <Flame size={18} /> Gas
+              </button>
+              <button 
+                onClick={() => onReportEmergency('Water')}
+                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <Droplets size={18} /> Water
+              </button>
+            </div>
+          </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Submitted" value={mine.length} color="red" sub="all time" />
@@ -2941,6 +3136,287 @@ function AnnouncementsView({ announcements }: any) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function AdvancedAnalytics({ stats, complaints, users }: any) {
+  if (!stats) return <div className="p-12 text-center">Loading analytics...</div>;
+
+  const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5', '#9B59B6'];
+
+  const funnelData = [
+    { name: 'Link Clicks', value: stats.funnel.link_clicked },
+    { name: 'Page Views', value: stats.funnel.website_opened },
+    { name: 'Registrations', value: stats.funnel.registered },
+    { name: 'Complaints', value: stats.funnel.complaint_submitted },
+    { name: 'Resolved', value: stats.funnel.complaint_resolved },
+  ];
+
+  const deviceData = stats.devices.map((d: any) => ({ name: d.device, value: d.count }));
+  const sourceData = stats.sources.map((s: any) => ({ name: s.source, value: s.count }));
+  
+  // Calculate some smart insights
+  const mostProblematicArea = complaints.length > 0 
+    ? Object.entries(complaints.reduce((acc: any, c: any) => { acc[c.area] = (acc[c.area] || 0) + 1; return acc; }, {}))
+        .sort((a: any, b: any) => b[1] - a[1])[0]?.[0]
+    : 'N/A';
+
+  const peakHour = stats.peak_times.length > 0
+    ? stats.peak_times.sort((a: any, b: any) => b.count - a.count)[0]?.hour
+    : 'N/A';
+
+  const conversionRate = stats.funnel.link_clicked > 0 
+    ? ((stats.funnel.registered / stats.funnel.link_clicked) * 100).toFixed(1)
+    : '0';
+
+  return (
+    <div className="space-y-8 pb-12">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-serif">Advanced Analytics</h1>
+        <div className="text-xs text-muted font-bold uppercase tracking-widest">Real-time Data Dashboard</div>
+      </div>
+
+      {/* Smart Insights */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-ink text-white rounded-3xl p-6 shadow-xl shadow-ink/20">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+              <Zap size={20} className="text-yellow-400" />
+            </div>
+            <h3 className="font-bold">Smart Insight</h3>
+          </div>
+          <p className="text-white/80 text-sm mb-2">Most problematic area detected:</p>
+          <div className="text-2xl font-serif text-accent">{mostProblematicArea}</div>
+          <p className="text-white/40 text-[10px] mt-4 uppercase tracking-widest">Based on complaint volume</p>
+        </div>
+
+        <div className="bg-white border border-border rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
+              <Clock size={20} className="text-accent" />
+            </div>
+            <h3 className="font-bold">Peak Usage</h3>
+          </div>
+          <p className="text-muted text-sm mb-2">Most active hour of the day:</p>
+          <div className="text-2xl font-serif text-ink">{peakHour}:00 - {parseInt(peakHour) + 1}:00</div>
+          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Heatmap peak detected</p>
+        </div>
+
+        <div className="bg-white border border-border rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+              <TrendingUp size={20} className="text-green-600" />
+            </div>
+            <h3 className="font-bold">Conversion</h3>
+          </div>
+          <p className="text-muted text-sm mb-2">Link to Registration rate:</p>
+          <div className="text-2xl font-serif text-ink">{conversionRate}%</div>
+          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Marketing efficiency</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* User Funnel */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <h3 className="text-xl font-serif mb-6">User Journey Funnel</h3>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funnelData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="value" fill="#E63946" radius={[0, 10, 10, 0]} barSize={30} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="p-4 bg-background rounded-2xl border border-border">
+              <div className="text-xs text-muted font-bold uppercase mb-1">Total Visitors</div>
+              <div className="text-2xl font-serif">{stats.unique_visitors}</div>
+            </div>
+            <div className="p-4 bg-background rounded-2xl border border-border">
+              <div className="text-xs text-muted font-bold uppercase mb-1">Total Events</div>
+              <div className="text-2xl font-serif">{stats.total_events}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Device & Source Distribution */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <h3 className="text-xl font-serif mb-6">Traffic Distribution</h3>
+          <div className="grid grid-cols-2 h-[250px]">
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold text-muted uppercase mb-2">Devices</span>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={deviceData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                    {deviceData.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold text-muted uppercase mb-2">Sources</span>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={sourceData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                    {sourceData.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="mt-6 space-y-2">
+            {sourceData.map((s: any, i: number) => (
+              <div key={i} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }}></div>
+                  {s.name}
+                </span>
+                <span className="font-bold">{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Peak Usage Heatmap */}
+      <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+        <h3 className="text-xl font-serif mb-6">Hourly Activity Heatmap</h3>
+        <div className="h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={stats.peak_times}>
+              <defs>
+                <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#E63946" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#E63946" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="hour" tickFormatter={(h) => `${h}:00`} />
+              <YAxis hide />
+              <Tooltip labelFormatter={(h) => `${h}:00`} />
+              <Area type="monotone" dataKey="count" stroke="#E63946" fillOpacity={1} fill="url(#colorCount)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmergenciesAdmin({ emergencies, onUpdateStatus, onDelete }: any) {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-serif">Emergency Management</h1>
+        <div className="px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-bold flex items-center gap-2">
+          <ShieldAlert size={16} /> {emergencies.filter((e: any) => e.status === 'pending').length} Active
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {emergencies.length === 0 ? (
+          <div className="bg-white border border-border rounded-3xl p-12 text-center">
+            <div className="text-4xl mb-4">🛡️</div>
+            <h3 className="text-xl font-serif mb-2">No emergencies reported</h3>
+            <p className="text-muted">System is clear. All quiet in Mozang.</p>
+          </div>
+        ) : (
+          emergencies.map((e: any) => (
+            <div key={e.id} className={`bg-white border-2 rounded-3xl p-6 shadow-sm transition-all ${e.status === 'pending' ? 'border-red-200 shadow-red-50' : 'border-border'}`}>
+              <div className="flex flex-col md:flex-row justify-between gap-6">
+                <div className="space-y-4 flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+                      e.type === 'Electricity' ? 'bg-yellow-500 shadow-yellow-200' :
+                      e.type === 'Gas' ? 'bg-orange-500 shadow-orange-200' :
+                      'bg-blue-500 shadow-blue-200'
+                    }`}>
+                      {e.type === 'Electricity' ? <Zap size={24} /> : e.type === 'Gas' ? <Flame size={24} /> : <Droplets size={24} />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-bold">{e.type} Emergency</h3>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest ${
+                          e.status === 'pending' ? 'bg-red-100 text-red-600' :
+                          e.status === 'dispatched' ? 'bg-blue-100 text-blue-600' :
+                          'bg-green-100 text-green-600'
+                        }`}>
+                          {e.status}
+                        </span>
+                      </div>
+                      <p className="text-muted text-sm">{new Date(e.timestamp).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-background p-4 rounded-2xl border border-border">
+                    <div className="flex items-center gap-2">
+                      <UserIcon size={16} className="text-muted" />
+                      <span className="text-sm font-bold">{e.userName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone size={16} className="text-muted" />
+                      <span className="text-sm font-bold">{e.userContact}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-muted" />
+                      <span className="text-sm font-bold">{e.area}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-ink italic">"{e.description}"</p>
+                </div>
+
+                <div className="flex flex-col gap-2 min-w-[160px]">
+                  <h4 className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Actions</h4>
+                  {e.status === 'pending' && (
+                    <button 
+                      onClick={() => onUpdateStatus(e.id, 'dispatched')}
+                      className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
+                    >
+                      <Truck size={18} /> Dispatch Team
+                    </button>
+                  )}
+                  {e.status === 'dispatched' && (
+                    <button 
+                      onClick={() => onUpdateStatus(e.id, 'resolved')}
+                      className="w-full py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-100 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={18} /> Mark Resolved
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => onDelete(e.id)}
+                    className="w-full py-3 bg-white border border-border text-red-500 rounded-xl font-bold hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={18} /> Delete Record
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      const report = `EMERGENCY REPORT\nType: ${e.type}\nArea: ${e.area}\nResident: ${e.userName}\nContact: ${e.userContact}\nTime: ${new Date(e.timestamp).toLocaleString()}\nStatus: ${e.status}`;
+                      navigator.clipboard.writeText(report);
+                      alert('Report copied to clipboard for sharing!');
+                    }}
+                    className="w-full py-3 bg-ink text-white rounded-xl font-bold hover:bg-ink/90 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Share2 size={18} /> Share Report
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

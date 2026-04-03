@@ -32,7 +32,37 @@ try {
       color TEXT,
       address TEXT,
       contact TEXT,
-      area TEXT
+      area TEXT,
+      createdAt TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      userId TEXT,
+      sessionId TEXT,
+      path TEXT,
+      source TEXT,
+      device TEXT,
+      browser TEXT,
+      os TEXT,
+      location TEXT,
+      duration INTEGER,
+      timestamp TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS emergencies (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      userName TEXT NOT NULL,
+      userContact TEXT NOT NULL,
+      area TEXT NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'pending',
+      timestamp TEXT NOT NULL,
+      lat REAL,
+      lng REAL
     );
 
     CREATE TABLE IF NOT EXISTS departments (
@@ -131,6 +161,8 @@ try {
   try { db.prepare("ALTER TABLE complaints ADD COLUMN area TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE suggestions ADD COLUMN status TEXT DEFAULT 'pending'").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE suggestions ADD COLUMN userContact TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE users ADD COLUMN createdAt TEXT").run(); } catch (e) {}
+  try { db.prepare("UPDATE users SET createdAt = ? WHERE createdAt IS NULL").run(new Date().toISOString()); } catch (e) {}
   try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
@@ -276,7 +308,7 @@ async function startServer() {
   });
 
   app.post("/api/users", (req, res) => {
-    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
+    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt } = req.body;
     
     // Validation for storage optimization
     if (name && name.length > 100) return res.status(400).json({ error: "Name too long" });
@@ -285,9 +317,9 @@ async function startServer() {
 
     try {
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, name, email, password, role, dept, deptName, avatar, color, address, contact, area);
+        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt || new Date().toISOString());
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -474,6 +506,113 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error updating complaint:', error);
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Analytics
+  app.post("/api/analytics/track", (req, res) => {
+    const { type, userId, sessionId, path, source, device, browser, os, location, duration, timestamp } = req.body;
+    try {
+      db.prepare(`
+        INSERT INTO analytics_events (type, userId, sessionId, path, source, device, browser, os, location, duration, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(type, userId || null, sessionId || null, path || null, source || null, device || null, browser || null, os || null, location || null, duration || null, timestamp || new Date().toISOString());
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error tracking analytics:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/analytics/stats", (req, res) => {
+    try {
+      const stats: any = {};
+      
+      // Basic counts
+      stats.total_events = db.prepare("SELECT count(*) as count FROM analytics_events").get().count;
+      stats.unique_visitors = db.prepare("SELECT count(DISTINCT sessionId) as count FROM analytics_events").get().count;
+      
+      // Device breakdown
+      stats.devices = db.prepare("SELECT device, count(*) as count FROM analytics_events WHERE device IS NOT NULL GROUP BY device").all();
+      
+      // Source breakdown
+      stats.sources = db.prepare("SELECT source, count(*) as count FROM analytics_events WHERE source IS NOT NULL GROUP BY source").all();
+      
+      // Path breakdown
+      stats.paths = db.prepare("SELECT path, count(*) as count FROM analytics_events WHERE path IS NOT NULL GROUP BY path").all();
+      
+      // Browser/OS
+      stats.browsers = db.prepare("SELECT browser, count(*) as count FROM analytics_events WHERE browser IS NOT NULL GROUP BY browser").all();
+      stats.os = db.prepare("SELECT os, count(*) as count FROM analytics_events WHERE os IS NOT NULL GROUP BY os").all();
+      
+      // User Funnel (Link Clicked -> Website Opened -> Registered -> Complaint -> Resolved)
+      // Note: This is a simplified funnel based on event types
+      stats.funnel = {
+        link_clicked: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'link_click'").get().count,
+        website_opened: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'page_view'").get().count,
+        registered: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'registration'").get().count,
+        complaint_submitted: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'complaint_submit'").get().count,
+        complaint_resolved: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'complaint_resolve'").get().count,
+      };
+
+      // Peak usage time (hour-wise)
+      stats.peak_times = db.prepare(`
+        SELECT strftime('%H', timestamp) as hour, count(*) as count 
+        FROM analytics_events 
+        GROUP BY hour 
+        ORDER BY hour ASC
+      `).all();
+
+      res.json(stats);
+    } catch (error: any) {
+      console.error('Error fetching analytics stats:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Emergencies
+  app.get("/api/emergencies", (req, res) => {
+    try {
+      const list = db.prepare("SELECT * FROM emergencies ORDER BY timestamp DESC").all();
+      res.json(list);
+    } catch (error: any) {
+      console.error('Error fetching emergencies:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/emergencies", (req, res) => {
+    const { id, userId, userName, userContact, area, type, description, timestamp, lat, lng } = req.body;
+    try {
+      db.prepare(`
+        INSERT INTO emergencies (id, userId, userName, userContact, area, type, description, timestamp, lat, lng)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, userId, userName, userContact, area, type, description || null, timestamp || new Date().toISOString(), lat || null, lng || null);
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      console.error('Error creating emergency:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/emergencies/:id", (req, res) => {
+    const { status } = req.body;
+    try {
+      db.prepare("UPDATE emergencies SET status = ? WHERE id = ?").run(status, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating emergency:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/emergencies/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM emergencies WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting emergency:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
