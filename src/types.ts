@@ -16,6 +16,7 @@ export interface User {
   deptName?: string;
   address?: string;
   contact?: string;
+  area?: string;
 }
 
 export interface Department {
@@ -48,6 +49,7 @@ export interface Complaint {
   residentId: string;
   address: string;
   contact: string;
+  area?: string;
   billReferenceNumber?: string;
   gpsAddress?: string;
   lat?: number;
@@ -74,6 +76,7 @@ export interface Suggestion {
   id: string;
   userId: string;
   userName: string;
+  userContact?: string;
   description: string;
   date: string;
   status: 'pending' | 'acknowledged';

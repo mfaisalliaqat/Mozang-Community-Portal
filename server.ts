@@ -31,7 +31,8 @@ try {
       avatar TEXT,
       color TEXT,
       address TEXT,
-      contact TEXT
+      contact TEXT,
+      area TEXT
     );
 
     CREATE TABLE IF NOT EXISTS departments (
@@ -60,6 +61,7 @@ try {
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
       contact TEXT NOT NULL,
+      area TEXT,
       billReferenceNumber TEXT,
       gpsAddress TEXT,
       lat REAL,
@@ -70,6 +72,7 @@ try {
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
       userName TEXT NOT NULL,
+      userContact TEXT,
       description TEXT NOT NULL,
       date TEXT NOT NULL,
       status TEXT DEFAULT 'pending'
@@ -111,7 +114,10 @@ try {
 
   try { db.prepare("ALTER TABLE complaints ADD COLUMN resolvedAt TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN billReferenceNumber TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE users ADD COLUMN area TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN area TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE suggestions ADD COLUMN status TEXT DEFAULT 'pending'").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE suggestions ADD COLUMN userContact TEXT").run(); } catch (e) {}
   try { db.prepare("UPDATE settings SET value = '0' WHERE key = 'departments_count' AND value = '6'").run(); } catch (e) {}
   console.log('Database schema verified');
 } catch (error) {
@@ -188,9 +194,9 @@ async function startServer() {
   });
 
   app.post("/api/suggestions", (req, res) => {
-    const { id, userId, userName, description, date, status } = req.body;
-    db.prepare("INSERT INTO suggestions (id, userId, userName, description, date, status) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(id, userId, userName, description, date, status || 'pending');
+    const { id, userId, userName, userContact, description, date, status } = req.body;
+    db.prepare("INSERT INTO suggestions (id, userId, userName, userContact, description, date, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(id, userId, userName, userContact, description, date, status || 'pending');
     res.json({ success: true });
   });
 
@@ -222,12 +228,12 @@ async function startServer() {
   });
 
   app.post("/api/users", (req, res) => {
-    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact } = req.body;
+    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
     try {
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, name, email, password, role, dept, deptName, avatar, color, address, contact);
+        INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, name, email, password, role, dept, deptName, avatar, color, address, contact, area);
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating user:', error);
@@ -246,13 +252,13 @@ async function startServer() {
   });
 
   app.patch("/api/users/:id", (req, res) => {
-    const { name, email, password, role, dept, deptName, avatar, color, address, contact } = req.body;
+    const { name, email, password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
     try {
       db.prepare(`
         UPDATE users 
-        SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?, address = ?, contact = ?
+        SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?, address = ?, contact = ?, area = ?
         WHERE id = ?
-      `).run(name, email, password, role, dept, deptName, avatar, color, address, contact, req.params.id);
+      `).run(name, email, password, role, dept, deptName, avatar, color, address, contact, area, req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error updating user:', error);
@@ -359,13 +365,13 @@ async function startServer() {
   });
 
   app.post("/api/complaints", (req, res) => {
-    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng, timeline } = req.body;
+    const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, area, billReferenceNumber, gpsAddress, lat, lng, timeline } = req.body;
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
-          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, billReferenceNumber, gpsAddress, lat, lng);
+          INSERT INTO complaints (id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, area, billReferenceNumber, gpsAddress, lat, lng)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, area, billReferenceNumber, gpsAddress, lat, lng);
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {

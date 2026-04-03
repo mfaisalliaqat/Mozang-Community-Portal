@@ -36,7 +36,7 @@ import {
   LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
-import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
+import { STATUS_COLORS, PRIORITY_COLORS, AREAS } from './constants';
 
 // --- ERROR HANDLING ---
 function handleApiError(error: unknown) {
@@ -123,6 +123,7 @@ function App() {
   const [newSubCategory, setNewSubCategory] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newContact, setNewContact] = useState('');
+  const [newArea, setNewArea] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newBillRef, setNewBillRef] = useState('');
   const [newSuggestion, setNewSuggestion] = useState('');
@@ -134,6 +135,7 @@ function App() {
   const [userRole, setUserRole] = useState<Role>('resident');
   const [userDept, setUserDept] = useState('');
   const [userContact, setUserContact] = useState('');
+  const [userArea, setUserArea] = useState('');
   const [userAddress, setUserAddress] = useState('');
   const [userAvatar, setUserAvatar] = useState('');
   const [userColor, setUserColor] = useState('');
@@ -315,7 +317,8 @@ function App() {
       avatar: userName.split(' ').map(n => n[0]).join('').toUpperCase(),
       color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16),
       address: userAddress,
-      contact: userContact
+      contact: userContact,
+      area: userArea
     };
     
     try {
@@ -328,7 +331,7 @@ function App() {
       showToast('User created');
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
-      setUserAddress(''); setUserContact('');
+      setUserAddress(''); setUserContact(''); setUserArea('');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -351,7 +354,8 @@ function App() {
       avatar: userName.split(' ').map(n => n[0]).join('').toUpperCase(),
       color: userColor || '#' + Math.floor(Math.random()*16777215).toString(16),
       address: userAddress,
-      contact: userContact
+      contact: userContact,
+      area: userArea
     };
     
     try {
@@ -364,7 +368,7 @@ function App() {
       showToast('User updated');
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
-      setUserAddress(''); setUserContact('');
+      setUserAddress(''); setUserContact(''); setUserArea('');
       setEditingUserId(null);
       fetchData();
     } catch (e) {
@@ -485,6 +489,7 @@ function App() {
       residentId: currentUser?.id || 'Unknown',
       address: newAddress,
       contact: newContact,
+      area: newArea || currentUser?.area,
       billReferenceNumber: newBillRef,
       timeline: [{ 
         time: today, 
@@ -506,6 +511,7 @@ function App() {
       // Reset form
       setNewAddress('');
       setNewContact('');
+      setNewArea('');
       setNewDesc('');
       setNewBillRef('');
       setNewSubCategory('');
@@ -584,6 +590,7 @@ function App() {
       id,
       userId: currentUser?.id,
       userName: currentUser?.name,
+      userContact: currentUser?.contact,
       description: newSuggestion,
       date: today
     };
@@ -1065,6 +1072,7 @@ function App() {
                   newSubCategory={newSubCategory} setNewSubCategory={setNewSubCategory}
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
+                  newArea={newArea} setNewArea={setNewArea}
                   newDesc={newDesc} setNewDesc={setNewDesc}
                   newBillRef={newBillRef} setNewBillRef={setNewBillRef}
                   onSubmit={submitComplaint}
@@ -1145,6 +1153,7 @@ function App() {
                   userRole={userRole} setUserRole={setUserRole}
                   userDept={userDept} setUserDept={setUserDept}
                   userContact={userContact} setUserContact={setUserContact}
+                  userArea={userArea} setUserArea={setUserArea}
                   userAddress={userAddress} setUserAddress={setUserAddress}
                   userColor={userColor} setUserColor={setUserColor}
                   editingUserId={editingUserId} setEditingUserId={setEditingUserId}
@@ -1580,14 +1589,10 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col gap-1">
           <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded w-fit">{complaint.id}</span>
-          <h3 className="text-lg font-serif group-hover:text-accent transition-colors line-clamp-1">{complaint.description}</h3>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <span className={`text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${STATUS_COLORS[complaint.status]}`}>
             {complaint.status.replace('-', ' ')}
-          </span>
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${PRIORITY_COLORS[complaint.priority]}`}>
-            {complaint.priority} priority
           </span>
         </div>
       </div>
@@ -1601,6 +1606,12 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
           <Building2 size={14} />
           <span>{dept?.name || complaint.category}</span>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <p className="text-base font-bold text-ink leading-relaxed">
+          {complaint.description}
+        </p>
       </div>
 
       <div className={`pt-4 border-t border-border space-y-3 ${isScreenshot ? 'bg-cream/30 -mx-6 px-6 pb-6' : ''}`}>
@@ -1622,11 +1633,6 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
           <UserIcon size={14} className="text-muted" />
           <span className="font-medium">{complaint.resident}</span>
         </div>
-        {isScreenshot && (
-          <div className="bg-white p-4 rounded-xl text-sm leading-relaxed italic text-ink mt-2 border border-border/50">
-            {complaint.description}
-          </div>
-        )}
       </div>
 
       {!isScreenshot && (
@@ -1645,6 +1651,7 @@ function SubmitForm({
   newSubCategory, setNewSubCategory,
   newAddress, setNewAddress, 
   newContact, setNewContact,
+  newArea, setNewArea,
   newDesc, setNewDesc, 
   newBillRef, setNewBillRef,
   onSubmit, onCancel,
@@ -1712,6 +1719,20 @@ function SubmitForm({
                 placeholder="Enter your complete address"
               />
             </div>
+          </div>
+
+          <div className="md:col-span-2 space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Area *</label>
+            <select 
+              value={newArea}
+              onChange={(e) => setNewArea(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            >
+              <option value="">Select Area</option>
+              {AREAS.map(area => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </select>
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
@@ -1955,6 +1976,7 @@ function AdminUsersView({
   userRole, setUserRole, 
   userDept, setUserDept, 
   userContact, setUserContact,
+  userArea, setUserArea,
   userAddress, setUserAddress,
   userColor, setUserColor,
   editingUserId, setEditingUserId,
@@ -1971,6 +1993,7 @@ function AdminUsersView({
     setUserRole(u.role);
     setUserDept(u.dept || '');
     setUserContact(u.contact || '');
+    setUserArea(u.area || '');
     setUserAddress(u.address || '');
     setUserColor(u.color || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1984,6 +2007,7 @@ function AdminUsersView({
     setUserRole('resident');
     setUserDept('');
     setUserContact('');
+    setUserArea('');
     setUserAddress('');
     setUserColor('');
   };
@@ -2047,6 +2071,19 @@ function AdminUsersView({
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="House #123, Street #456"
             />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Area</label>
+            <select 
+              value={userArea}
+              onChange={(e) => setUserArea(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+            >
+              <option value="">Select Area</option>
+              {AREAS.map(area => (
+                <option key={area} value={area}>{area}</option>
+              ))}
+            </select>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold tracking-wide">User Role</label>
@@ -2480,9 +2517,8 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
   const dept = departments.find((d: any) => d.id === complaint.category);
   const [comment, setComment] = useState('');
 
-  // Sequential commenting logic: can only send if the last message wasn't from you
-  const lastEntry = complaint.timeline[complaint.timeline.length - 1];
-  const canComment = !lastEntry || lastEntry.authorId !== user.id;
+  // Sequential commenting logic: anyone can comment anytime now
+  const canComment = true;
 
   const handleSendComment = () => {
     if (!comment.trim()) return;
@@ -2515,7 +2551,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
                 <ArrowLeft size={14} /> Back to List
               </button>
               <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted w-fit">{complaint.id}</span>
-              <h2 className="text-3xl font-serif mt-1">{complaint.description.substring(0, 50)}...</h2>
+              <h2 className="text-2xl font-serif mt-1 font-bold">{complaint.description}</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-cream rounded-full transition-colors">
               <X size={24} />
@@ -2536,26 +2572,26 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 bg-cream/30 p-6 rounded-2xl border border-border/50">
             <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Submitted By</div>
-              <div className="text-sm font-medium flex items-center gap-2"><UserIcon size={14} className="text-muted" /> {complaint.resident}</div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Resident Name</div>
+              <div className="text-sm font-bold flex items-center gap-2 text-accent"><UserIcon size={14} /> {complaint.resident}</div>
             </div>
             <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Date</div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Contact Phone</div>
+              <div className="text-sm font-bold flex items-center gap-2 text-accent"><Phone size={14} /> {complaint.contact}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Date Submitted</div>
               <div className="text-sm font-medium flex items-center gap-2"><Calendar size={14} className="text-muted" /> {complaint.date}</div>
             </div>
             <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Address</div>
+              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Location</div>
               <div className="text-sm font-medium flex items-center gap-2"><MapPin size={14} className="text-muted" /> {complaint.address}</div>
             </div>
-            <div>
-              <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Contact</div>
-              <div className="text-sm font-medium flex items-center gap-2"><Phone size={14} className="text-muted" /> {complaint.contact}</div>
-            </div>
             {complaint.billReferenceNumber && (
-              <div>
-                <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Bill Ref</div>
+              <div className="col-span-full pt-4 border-t border-border/50">
+                <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Bill Reference Number</div>
                 <div className="text-sm font-medium flex items-center gap-2"><ClipboardList size={14} className="text-muted" /> {complaint.billReferenceNumber}</div>
               </div>
             )}
@@ -2712,6 +2748,12 @@ function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCan
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.date}</span>
+                    {s.userContact && (
+                      <>
+                        <span className="text-[10px] text-muted">•</span>
+                        <span className="text-[10px] text-muted flex items-center gap-1"><Phone size={10} /> {s.userContact}</span>
+                      </>
+                    )}
                     <span className="text-[10px] text-muted">•</span>
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${s.status === 'acknowledged' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
                       {s.status}
@@ -2755,6 +2797,12 @@ function SuggestionsList({ suggestions, onDelete, onAcknowledge, userRole }: any
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.userName}</span>
+                  {s.userContact && (
+                    <>
+                      <span className="text-[10px] text-muted">•</span>
+                      <span className="text-[10px] font-bold text-accent uppercase tracking-widest flex items-center gap-1"><Phone size={10} /> {s.userContact}</span>
+                    </>
+                  )}
                   <span className="text-[10px] text-muted">•</span>
                   <span className="text-[10px] text-muted">{s.date}</span>
                   <span className={`ml-2 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${s.status === 'acknowledged' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -2830,14 +2878,91 @@ function InsightsView({ user, complaints, departments, users }: any) {
     return { name: d.name.split(' ')[0], rate };
   });
 
+  // Area-wise Statistics
+  const areaStats = AREAS.map(area => {
+    const areaComplaints = complaints.filter((c: any) => c.area === area);
+    const total = areaComplaints.length;
+    
+    // Find most common category in this area
+    const categoryCounts: Record<string, number> = {};
+    areaComplaints.forEach((c: any) => {
+      categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1;
+    });
+    
+    let topCategory = 'None';
+    let maxCount = 0;
+    Object.entries(categoryCounts).forEach(([catId, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topCategory = departments.find((d: any) => d.id === catId)?.name || catId;
+      }
+    });
+
+    return { area, total, topCategory };
+  }).filter(stat => stat.total > 0).sort((a, b) => b.total - a.total);
+
+  const areaChartData = areaStats.map(s => ({
+    name: s.area.length > 10 ? s.area.substring(0, 10) + '...' : s.area,
+    count: s.total,
+    fullName: s.area
+  }));
+
   return (
     <div className="space-y-8">
       <div className="page-header">
-        <h1 className="text-4xl font-serif">Graphical Insights</h1>
-        <p className="text-muted mt-1">Visualizing community data and performance metrics.</p>
+        <h1 className="text-4xl font-serif">Community Insights</h1>
+        <p className="text-muted mt-1">Comprehensive statistics and area-wise performance metrics.</p>
+      </div>
+
+      {/* Area-wise Text Stats (Easy to screenshot) */}
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
+        <h3 className="text-xl font-serif mb-6 flex items-center gap-2 text-accent">
+          <MapPin size={24} />
+          Area-wise Performance Summary
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {areaStats.map((stat, idx) => (
+            <div key={idx} className="p-4 bg-cream rounded-xl border border-border/50">
+              <div className="text-sm font-bold text-ink mb-1">{stat.area}</div>
+              <div className="flex justify-between items-end">
+                <div>
+                  <div className="text-[10px] text-muted uppercase tracking-widest">Total Complaints</div>
+                  <div className="text-2xl font-serif text-accent">{stat.total}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-muted uppercase tracking-widest">Top Issue</div>
+                  <div className="text-xs font-bold text-ink">{stat.topCategory}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {areaStats.length === 0 && (
+            <div className="col-span-full py-8 text-center text-muted italic">
+              No area-wise data available yet.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Area Chart */}
+        <div className="bg-white border border-border rounded-2xl p-8 shadow-sm lg:col-span-2">
+          <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
+            <BarChart3 size={20} className="text-accent" />
+            Complaints Distribution by Area
+          </h3>
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={areaChartData} layout="vertical" margin={{ left: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                <XAxis type="number" axisLine={false} tickLine={false} />
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={100} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#c8502a" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
         {/* Common Charts */}
         <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
           <h3 className="text-lg font-serif mb-6 flex items-center gap-2">

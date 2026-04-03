@@ -12,3 +12,28 @@ export const PRIORITY_COLORS: Record<Priority, string> = {
   medium: 'bg-amber-500',
   high: 'bg-rose-500',
 };
+
+export const AREAS = [
+  'Shadab Colony',
+  'Chiragh Din Road',
+  'Park Lane',
+  'Punj Mehal Road',
+  'Temple Road',
+  'Mozang Road',
+  'Regal Road',
+  'Main Bazar',
+  'Mubarak Pura',
+  'Qila Mehra',
+  'Muhalla Madahar',
+  'Badar Din Road',
+  'Nazooli Muhalla',
+  'Qureshi Muhalla',
+  'Chah Pichwara',
+  'Janazgah Road Bazar',
+  'Lytton Road',
+  'Saadi Park',
+  'Hari Shah Road',
+  'Noor Shah Road',
+  'Kanak Mandi',
+  'Kot Abdullah Shah',
+] as const;
