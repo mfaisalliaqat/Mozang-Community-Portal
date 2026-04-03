@@ -337,8 +337,9 @@ function App() {
   };
 
   const handleLogin = () => {
-    console.log('Attempting login with:', { loginEmail, loginRole, usersCount: users.length });
-    const u = users.find(u => u.email === loginEmail && u.password === loginPass);
+    const email = loginEmail.trim().toLowerCase();
+    console.log('Attempting login with:', { email, loginRole, usersCount: users.length });
+    const u = users.find(u => u.email.toLowerCase() === email && u.password === loginPass);
     if (!u) {
       console.log('User not found in:', users.map(u => u.email));
       showToast('Invalid credentials.');

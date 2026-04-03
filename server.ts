@@ -139,14 +139,25 @@ try {
 }
 
 // Seed initial admin if none exists
-const adminExists = db.prepare("SELECT count(*) as count FROM users WHERE role = 'admin'").get() as { count: number };
-if (adminExists.count === 0) {
-  db.prepare(`
-    INSERT INTO users (id, name, email, password, role, avatar, color)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run('A001', 'System Admin', 'admin@mozang.com', 'admin', 'admin', 'SA', '#c8502a');
-  console.log('Seeded initial admin user');
+const admins = [
+  { id: 'A001', name: 'System Admin', email: 'admin@mozang.com', password: 'admin', role: 'admin', avatar: 'SA', color: '#c8502a' },
+  { id: 'A002', name: 'Muhammad Faisal', email: 'mfaisalliaqat@gmail.com', password: 'admin', role: 'admin', avatar: 'MF', color: '#c8502a' }
+];
+
+const insertUser = db.prepare(`
+  INSERT OR IGNORE INTO users (id, name, email, password, role, avatar, color)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+const updateRole = db.prepare(`
+  UPDATE users SET role = 'admin' WHERE email = ?
+`);
+
+for (const admin of admins) {
+  insertUser.run(admin.id, admin.name, admin.email, admin.password, admin.role, admin.avatar, admin.color);
+  updateRole.run(admin.email);
 }
+console.log('Seeded and verified admin users');
 
 // Seed initial areas if none exist
 const areasExist = db.prepare("SELECT count(*) as count FROM areas").get() as { count: number };
