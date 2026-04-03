@@ -107,7 +107,11 @@ function App() {
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowInstallPrompt(true);
+      // Only show popup automatically if not already in standalone mode
+      const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      if (!isStandaloneMode) {
+        setShowInstallPrompt(true);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -121,6 +125,7 @@ function App() {
     const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     setIsStandalone(isStandaloneMode);
 
+    // For iOS, we can't detect beforeinstallprompt, so we show the guide if not standalone
     if (isIOSDevice && !isStandaloneMode) {
       setShowInstallPrompt(true);
     }
@@ -129,7 +134,14 @@ function App() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      if (isIOS) {
+        setShowInstallPrompt(true);
+      } else {
+        showToast('Please open in Chrome or Edge to install.');
+      }
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
@@ -966,6 +978,56 @@ function App() {
                 یہ اقدام صرف بانی کی ذاتی کاوش ہے، جو میرے والدین کے لیے صدقہ جاریہ کے طور پر شروع کیا گیا ہے۔ اس کا کسی بھی سیاسی جماعت یا تنظیم سے کوئی تعلق نہیں ہے۔
               </p>
             </motion.div>
+
+            {/* PWA Install Section for Landing Page */}
+            {!isStandalone && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2 }}
+                className="mt-12 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm"
+              >
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-xl shadow-2xl shadow-accent/20">
+                    MCP
+                  </div>
+                  <div className="flex-1 text-center md:text-left">
+                    <h3 className="text-white font-serif text-xl mb-2">Get the Mozang CP App</h3>
+                    <p className="text-white/50 text-sm mb-4">Install our app on your phone or desktop for instant access, offline support, and a better experience.</p>
+                    
+                    {isIOS ? (
+                      <div className="inline-flex flex-col gap-2 text-left bg-white/5 p-4 rounded-2xl border border-white/5">
+                        <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-1">iOS Installation Guide:</p>
+                        <div className="flex items-center gap-3 text-xs text-white/80">
+                          <div className="w-6 h-6 bg-white/10 rounded flex items-center justify-center border border-white/10">
+                            <Share size={12} className="text-accent" />
+                          </div>
+                          <span>Tap the <strong>Share</strong> icon in Safari</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-white/80">
+                          <div className="w-6 h-6 bg-white/10 rounded flex items-center justify-center border border-white/10">
+                            <Plus size={12} className="text-white" />
+                          </div>
+                          <span>Select <strong>Add to Home Screen</strong></span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleInstallClick}
+                        disabled={!deferredPrompt && !isIOS}
+                        className={`px-8 py-3 rounded-2xl font-bold uppercase tracking-widest transition-all shadow-xl ${
+                          (deferredPrompt || isIOS) 
+                            ? 'bg-accent text-white hover:bg-white hover:text-ink shadow-accent/20' 
+                            : 'bg-white/10 text-white/30 cursor-not-allowed'
+                        }`}
+                      >
+                        {deferredPrompt ? 'Install Now' : 'App Ready to Install'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -1053,6 +1115,14 @@ function App() {
         </div>
         
         <div className="flex items-center gap-6">
+          {!isStandalone && (
+            <button
+              onClick={() => setShowInstallPrompt(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-full border border-accent/30 transition-all text-xs font-bold uppercase tracking-widest"
+            >
+              <Plus size={14} /> Install App
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
@@ -1218,6 +1288,23 @@ function App() {
                 </>
               )}
             </div>
+
+            {!isStandalone && (
+              <div className="mt-auto pt-6 border-t border-border">
+                <button
+                  onClick={() => setShowInstallPrompt(true)}
+                  className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
+                >
+                  <div className="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+                    <Plus size={20} />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-xs font-bold uppercase tracking-widest">Install App</div>
+                    <div className="text-[10px] text-accent/60">Faster Access</div>
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -1284,12 +1371,23 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <button 
-                      onClick={handleInstallClick}
-                      className="w-full py-3 bg-ink text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-accent transition-all shadow-lg shadow-ink/10"
-                    >
-                      Install Now
-                    </button>
+                    <div className="space-y-3">
+                      <button 
+                        onClick={handleInstallClick}
+                        className={`w-full py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg ${
+                          deferredPrompt 
+                            ? 'bg-ink text-white hover:bg-accent shadow-ink/10' 
+                            : 'bg-cream text-muted border border-border cursor-default'
+                        }`}
+                      >
+                        {deferredPrompt ? 'Install Now' : 'App Ready to Install'}
+                      </button>
+                      {!deferredPrompt && (
+                        <p className="text-[10px] text-muted text-center italic">
+                          If the button is disabled, try refreshing the page or check your browser's menu for "Install App".
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
