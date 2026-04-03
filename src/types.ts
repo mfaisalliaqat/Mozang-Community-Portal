@@ -1,6 +1,6 @@
 export type Role = 'resident' | 'officer' | 'admin';
 
-export type Status = 'pending' | 'in-progress' | 'resolved' | 'rejected';
+export type Status = 'pending' | 'in-progress' | 'resolved' | 'rejected' | 'closed-not-actionable';
 
 export type Priority = 'low' | 'medium' | 'high';
 

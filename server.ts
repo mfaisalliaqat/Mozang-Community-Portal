@@ -57,6 +57,7 @@ try {
       priority TEXT NOT NULL,
       date TEXT NOT NULL,
       resolvedAt TEXT,
+      closureReason TEXT,
       resident TEXT NOT NULL,
       residentId TEXT NOT NULL,
       address TEXT NOT NULL,
@@ -124,6 +125,7 @@ try {
   try { db.prepare("ALTER TABLE complaints ADD COLUMN lng REAL").run(); } catch (e) {}
 
   try { db.prepare("ALTER TABLE complaints ADD COLUMN resolvedAt TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE complaints ADD COLUMN closureReason TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN billReferenceNumber TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN area TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN area TEXT").run(); } catch (e) {}
@@ -437,13 +439,13 @@ async function startServer() {
   });
 
   app.patch("/api/complaints/:id", (req, res) => {
-    const { status, priority, timelineEntry } = req.body;
+    const { status, priority, timelineEntry, closureReason } = req.body;
     try {
       const update = db.transaction(() => {
         if (status) {
-          if (status === 'resolved') {
-            db.prepare("UPDATE complaints SET status = ?, resolvedAt = ? WHERE id = ?")
-              .run(status, new Date().toISOString().split('T')[0], req.params.id);
+          if (status === 'resolved' || status === 'closed-not-actionable') {
+            db.prepare("UPDATE complaints SET status = ?, resolvedAt = ?, closureReason = ? WHERE id = ?")
+              .run(status, new Date().toISOString().split('T')[0], closureReason || null, req.params.id);
           } else {
             db.prepare("UPDATE complaints SET status = ? WHERE id = ?").run(status, req.params.id);
           }
@@ -461,6 +463,50 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error updating complaint:', error);
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Backup & Restore
+  app.get("/api/backup", (req, res) => {
+    try {
+      const tables = ['users', 'departments', 'sub_categories', 'complaints', 'suggestions', 'timeline', 'announcements', 'settings', 'areas'];
+      const backup: any = {};
+      for (const table of tables) {
+        backup[table] = db.prepare(`SELECT * FROM ${table}`).all();
+      }
+      res.json(backup);
+    } catch (error: any) {
+      console.error('Backup failed:', error);
+      res.status(500).json({ error: 'Backup failed', message: error.message });
+    }
+  });
+
+  app.post("/api/restore", (req, res) => {
+    const backup = req.body;
+    try {
+      const restore = db.transaction(() => {
+        // Clear tables
+        const tables = ['users', 'departments', 'sub_categories', 'complaints', 'suggestions', 'timeline', 'announcements', 'settings', 'areas'];
+        for (const table of tables) {
+          db.prepare(`DELETE FROM ${table}`).run();
+          if (backup[table]) {
+            const data = backup[table];
+            if (data.length > 0) {
+              const keys = Object.keys(data[0]);
+              const placeholders = keys.map(() => '?').join(',');
+              const stmt = db.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`);
+              for (const row of data) {
+                stmt.run(keys.map(k => row[k]));
+              }
+            }
+          }
+        }
+      });
+      restore();
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Restore failed:', error);
+      res.status(500).json({ error: 'Restore failed', message: error.message });
     }
   });
 

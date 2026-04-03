@@ -1,5 +1,6 @@
 import React, { useState, useEffect, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { 
   LogOut, 
   Home, 
@@ -28,7 +29,14 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   TrendingUp,
-  Clock
+  Clock,
+  Download,
+  Upload,
+  FileText,
+  Database,
+  RefreshCw,
+  Share,
+  Plus
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, 
@@ -90,6 +98,46 @@ export default function AppWrapper() {
 }
 
 function App() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Check if iOS
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIOSDevice);
+
+    // Check if already installed
+    const isStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    setIsStandalone(isStandaloneMode);
+
+    if (isIOSDevice && !isStandaloneMode) {
+      setShowInstallPrompt(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setShowInstallPrompt(false);
+    }
+  };
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mozang_user');
     try {
@@ -580,13 +628,14 @@ function App() {
     }
   };
 
-  const updateStatus = async (id: string, status: Status) => {
+  const updateStatus = async (id: string, status: Status, closureReason?: string) => {
     const today = new Date().toISOString().split('T')[0];
     const msgs: Record<Status, string> = {
       pending: 'Moved back to pending',
       'in-progress': 'Status updated to In Progress',
       resolved: 'Issue marked as Resolved',
-      rejected: 'Complaint rejected by admin'
+      rejected: 'Complaint rejected by admin',
+      'closed-not-actionable': `Closed as Not Actionable: ${closureReason}`
     };
     
     const complaint = complaints.find(c => c.id === id);
@@ -598,6 +647,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status,
+          closureReason,
           timelineEntry: { 
             time: today, 
             text: msgs[status],
@@ -607,11 +657,52 @@ function App() {
         })
       });
       if (!res.ok) throw new Error('Failed to update status');
-      showToast(`Status updated to ${status}`);
+      showToast(`Status updated to ${status.replace('-', ' ')}`);
       setSelectedComplaint(null);
       fetchData();
     } catch (e) {
       handleApiError(e);
+    }
+  };
+
+  const backupData = async () => {
+    try {
+      const res = await fetch('/api/backup');
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mozang_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      showToast('Backup downloaded successfully');
+    } catch (error) {
+      console.error('Backup failed:', error);
+      showToast('Backup failed');
+    }
+  };
+
+  const restoreData = async (file: File) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = JSON.parse(e.target?.result as string);
+        const res = await fetch('/api/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          showToast('System restored successfully');
+          window.location.reload();
+        } else {
+          showToast('Restore failed');
+        }
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      console.error('Restore failed:', error);
+      showToast('Restore failed');
     }
   };
 
@@ -766,10 +857,24 @@ function App() {
           <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/15 to-transparent blur-3xl"></div>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-radial from-white/5 to-transparent blur-3xl"></div>
           
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 relative z-10 text-center md:text-left"
+          >
+            <p className="font-amiri text-white/90 text-lg md:text-xl leading-relaxed mb-2" dir="rtl">
+              اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
+            </p>
+            <p className="font-amiri text-white/90 text-lg md:text-xl leading-relaxed" dir="rtl">
+              اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
+            </p>
+          </motion.div>
+
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 text-2xl font-serif text-white relative z-10"
+            transition={{ delay: 0.2 }}
+            className="flex items-center gap-3 text-2xl font-serif text-white relative z-10 mb-12"
           >
             <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30 text-white font-bold text-sm">
               MCP
@@ -848,6 +953,17 @@ function App() {
                 <Facebook size={18} className="text-white group-hover:text-accent transition-colors" />
                 <span className="text-white/80 text-sm font-medium">Facebook.com/Mozangpk</span>
               </a>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.0 }}
+              className="mt-8 pt-6 border-t border-white/10"
+            >
+              <p className="text-white/60 text-sm leading-relaxed font-medium text-right md:text-left" dir="rtl">
+                یہ اقدام صرف بانی کی ذاتی کاوش ہے، جو میرے والدین کے لیے صدقہ جاریہ کے طور پر شروع کیا گیا ہے۔ اس کا کسی بھی سیاسی جماعت یا تنظیم سے کوئی تعلق نہیں ہے۔
+              </p>
             </motion.div>
           </div>
         </div>
@@ -1019,11 +1135,11 @@ function App() {
                       label="Assigned" 
                       active={currentPage === 'dept-complaints'} 
                       onClick={() => { setCurrentPage('dept-complaints'); setShowMobileMenu(false); }} 
-                      count={getDeptComplaints().filter(c => c.status !== 'resolved').length}
+                      count={getDeptComplaints().filter(c => c.status !== 'resolved' && c.status !== 'closed-not-actionable').length}
                     />
                     <SidebarItem 
                       icon={<CheckCircle2 size={18} />} 
-                      label="Resolved" 
+                      label="Closed" 
                       active={currentPage === 'resolved'} 
                       onClick={() => { setCurrentPage('resolved'); setShowMobileMenu(false); }} 
                     />
@@ -1075,6 +1191,12 @@ function App() {
                       active={currentPage === 'portal-settings'} 
                       onClick={() => { setCurrentPage('portal-settings'); setShowMobileMenu(false); }} 
                     />
+                    <SidebarItem 
+                      icon={<Database size={18} />} 
+                      label="System Management" 
+                      active={currentPage === 'system-management'} 
+                      onClick={() => { setCurrentPage('system-management'); setShowMobileMenu(false); }} 
+                    />
                   </>
                 )}
               </div>
@@ -1113,7 +1235,69 @@ function App() {
 
         {/* Main Content */}
         <main className="flex-1 p-6 md:p-10 overflow-y-auto">
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
+        {showInstallPrompt && !isStandalone && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-6 left-6 right-6 z-[100] md:left-auto md:right-6 md:w-96"
+          >
+            <div className="bg-white border-2 border-accent rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-accent"></div>
+              <button 
+                onClick={() => setShowInstallPrompt(false)}
+                className="absolute top-4 right-4 text-muted hover:text-ink"
+              >
+                <X size={20} />
+              </button>
+              
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center shrink-0 text-white font-bold shadow-lg shadow-accent/20">
+                  MCP
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-serif text-lg leading-tight mb-1">Install Mozang CP</h3>
+                  <p className="text-xs text-muted leading-relaxed mb-4">
+                    Install our app for faster access and offline support. Minimal storage required.
+                  </p>
+                  
+                  {isIOS ? (
+                    <div className="space-y-3 bg-cream/50 p-3 rounded-xl border border-border/50">
+                      <p className="text-[10px] font-bold text-ink uppercase tracking-wider flex items-center gap-2">
+                        How to install on iOS:
+                      </p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center border border-border shadow-sm">
+                            <Share size={12} className="text-accent2" />
+                          </div>
+                          <span>Tap the <strong>Share</strong> button below</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center border border-border shadow-sm">
+                            <Plus size={12} className="text-ink" />
+                          </div>
+                          <span>Select <strong>Add to Home Screen</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={handleInstallClick}
+                      className="w-full py-3 bg-ink text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-accent transition-all shadow-lg shadow-ink/10"
+                    >
+                      Install Now
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
             <motion.div
               key={currentPage}
               initial={{ opacity: 0, y: 10 }}
@@ -1198,8 +1382,8 @@ function App() {
               )}
               {currentPage === 'resolved' && (
                 <ComplaintsList 
-                  title="Resolved Complaints" 
-                  list={getDeptComplaints().filter(c => c.status === 'resolved')} 
+                  title="Closed Complaints" 
+                  list={getDeptComplaints().filter(c => c.status === 'resolved' || c.status === 'closed-not-actionable')} 
                   onSelect={setSelectedComplaint}
                   departments={departments}
                   onBack={() => setCurrentPage('dashboard')}
@@ -1269,6 +1453,13 @@ function App() {
                   onDelete={deleteArea}
                   onUpdate={updateArea}
                   complaints={complaints}
+                />
+              )}
+              {currentPage === 'system-management' && (
+                <SystemManagementView 
+                  complaints={complaints}
+                  onBackup={backupData}
+                  onRestore={restoreData}
                 />
               )}
               {currentPage === 'announcements' && (
@@ -1416,6 +1607,8 @@ function PortalSettingsView({ settings, onUpdate }: any) {
 function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments }: any) {
   const r = user.role;
   
+  const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
+
   if (r === 'resident') {
     const mine = complaints.filter((c: any) => c.residentId === user.id);
     return (
@@ -1437,7 +1630,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
           <StatCard label="Total Submitted" value={mine.length} color="red" sub="all time" />
           <StatCard label="Pending" value={mine.filter((c: any) => c.status === 'pending').length} color="gold" sub="awaiting review" />
           <StatCard label="In Progress" value={mine.filter((c: any) => c.status === 'in-progress').length} color="blue" sub="being handled" />
-          <StatCard label="Resolved" value={mine.filter((c: any) => c.status === 'resolved').length} color="green" sub="issues closed" />
+          <StatCard label="Closed" value={mine.filter(isClosed).length} color="green" sub="resolved or closed" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1479,7 +1672,6 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
 
   if (r === 'officer') {
     const deptComplaints = complaints.filter((c: any) => c.category === user.dept);
-    const deptIcon = '';
     return (
       <div className="space-y-8">
         <div className="page-header">
@@ -1490,7 +1682,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Pending" value={deptComplaints.filter((c: any) => c.status === 'pending').length} color="gold" sub="needs attention" />
           <StatCard label="In Progress" value={deptComplaints.filter((c: any) => c.status === 'in-progress').length} color="blue" sub="currently active" />
-          <StatCard label="Resolved" value={deptComplaints.filter((c: any) => c.status === 'resolved').length} color="green" sub="closed issues" />
+          <StatCard label="Closed" value={deptComplaints.filter(isClosed).length} color="green" sub="resolved or closed" />
           <StatCard label="Total" value={deptComplaints.length} color="red" sub="all time" />
         </div>
 
@@ -1505,14 +1697,14 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
             </button>
           </div>
           <div className="space-y-3">
-            {deptComplaints.filter((c: any) => c.status !== 'resolved').length === 0 ? (
+            {deptComplaints.filter((c: any) => !isClosed(c)).length === 0 ? (
               <div className="bg-white border border-border rounded-2xl p-12 text-center">
                 <div className="text-4xl mb-4">🎉</div>
                 <h3 className="text-xl font-serif mb-2">All caught up!</h3>
                 <p className="text-muted">No open complaints in your department.</p>
               </div>
             ) : (
-              deptComplaints.filter((c: any) => c.status !== 'resolved').map((c: any, idx: number) => (
+              deptComplaints.filter((c: any) => !isClosed(c)).map((c: any, idx: number) => (
                 <ComplaintCard key={c.id} complaint={c} idx={idx} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
@@ -1521,23 +1713,23 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
 
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-serif">Recently Resolved</h2>
+            <h2 className="text-2xl font-serif">Recently Closed</h2>
             <button 
               onClick={() => onNavigate('resolved')}
               className="text-xs font-bold text-accent uppercase tracking-widest hover:underline"
             >
-              View All Resolved
+              View All Closed
             </button>
           </div>
           <div className="space-y-3">
-            {deptComplaints.filter((c: any) => c.status === 'resolved').length === 0 ? (
+            {deptComplaints.filter(isClosed).length === 0 ? (
               <div className="bg-white border border-border rounded-2xl p-12 text-center">
                 <div className="text-4xl mb-4">📜</div>
-                <h3 className="text-xl font-serif mb-2">No resolved issues yet</h3>
-                <p className="text-muted">Issues you resolve will appear here.</p>
+                <h3 className="text-xl font-serif mb-2">No closed issues yet</h3>
+                <p className="text-muted">Issues you close will appear here.</p>
               </div>
             ) : (
-              deptComplaints.filter((c: any) => c.status === 'resolved').slice(0, 3).map((c: any, idx: number) => (
+              deptComplaints.filter(isClosed).slice(0, 3).map((c: any, idx: number) => (
                 <ComplaintCard key={c.id} complaint={c} idx={idx} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
@@ -1559,7 +1751,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
         <StatCard label="Total Complaints" value={complaints.length} color="red" />
         <StatCard label="Pending" value={complaints.filter((c: any) => c.status === 'pending').length} color="gold" />
         <StatCard label="In Progress" value={complaints.filter((c: any) => c.status === 'in-progress').length} color="blue" />
-        <StatCard label="Resolved" value={complaints.filter((c: any) => c.status === 'resolved').length} color="green" />
+        <StatCard label="Closed" value={complaints.filter(isClosed).length} color="green" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1568,13 +1760,13 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
           <div className="space-y-6">
             {departments.map((d: any) => {
               const all = complaints.filter((c: any) => c.category === d.id);
-              const res = all.filter((c: any) => c.status === 'resolved');
-              const pct = all.length === 0 ? 0 : Math.round((res.length / all.length) * 100);
+              const closed = all.filter(isClosed);
+              const pct = all.length === 0 ? 0 : Math.round((closed.length / all.length) * 100);
               return (
                 <div key={d.id} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="font-medium flex items-center gap-2">{d.name}</span>
-                    <span className="text-muted">{res.length}/{all.length} resolved</span>
+                    <span className="text-muted">{closed.length}/{all.length} closed</span>
                   </div>
                   <div className="h-2 bg-cream rounded-full overflow-hidden">
                     <motion.div 
@@ -1596,6 +1788,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               { label: 'Pending', icon: '🔴', count: complaints.filter(c => c.status === 'pending').length, color: 'text-orange-600' },
               { label: 'In Progress', icon: '🔵', count: complaints.filter(c => c.status === 'in-progress').length, color: 'text-blue-600' },
               { label: 'Resolved', icon: '🟢', count: complaints.filter(c => c.status === 'resolved').length, color: 'text-green-600' },
+              { label: 'Closed (Not Actionable)', icon: '⚪', count: complaints.filter(c => c.status === 'closed-not-actionable').length, color: 'text-gray-600' },
             ].map(s => (
               <div key={s.label} className="flex items-center justify-between p-4 bg-cream rounded-xl">
                 <span className="text-sm font-medium">{s.icon} {s.label}</span>
@@ -1606,7 +1799,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               onClick={() => onNavigate('all-complaints')}
               className="w-full mt-4 py-3 border-2 border-border rounded-xl text-sm font-bold hover:bg-ink hover:text-white transition-all flex items-center justify-center gap-2"
             >
-              View All Complaints <ChevronRight size={16} />
+              <ClipboardList size={16} /> View All Complaints
             </button>
           </div>
         </div>
@@ -2740,6 +2933,8 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
   const canUpdate = userRole === 'admin' || (userRole === 'officer' && user.dept === complaint.category);
   const dept = departments.find((d: any) => d.id === complaint.category);
   const [comment, setComment] = useState('');
+  const [showReasonPrompt, setShowReasonPrompt] = useState(false);
+  const [closureReason, setClosureReason] = useState('');
 
   // Sequential commenting logic: anyone can comment anytime now
   const canComment = true;
@@ -2749,6 +2944,23 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
     onAddComment(complaint.id, comment);
     setComment('');
   };
+
+  const handleUpdateStatus = (status: Status) => {
+    if (status === 'closed-not-actionable') {
+      setShowReasonPrompt(true);
+    } else {
+      onUpdateStatus(complaint.id, status);
+    }
+  };
+
+  const submitClosure = () => {
+    if (!closureReason.trim()) return;
+    onUpdateStatus(complaint.id, 'closed-not-actionable', closureReason);
+    setShowReasonPrompt(false);
+    setClosureReason('');
+  };
+
+  const isClosed = complaint.status === 'resolved' || complaint.status === 'closed-not-actionable';
 
   return (
     <motion.div 
@@ -2821,6 +3033,13 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
             )}
           </div>
 
+          {complaint.closureReason && (
+            <div className="mb-8 p-6 bg-rose-50 border border-rose-100 rounded-2xl">
+              <div className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-2">Closure Reason (Not Actionable)</div>
+              <p className="text-sm text-rose-900 font-medium italic">"{complaint.closureReason}"</p>
+            </div>
+          )}
+
           <div className="space-y-2 mb-8">
             <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Description</div>
             <div className="bg-cream p-6 rounded-2xl text-sm leading-relaxed text-ink">
@@ -2846,7 +3065,7 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
             </div>
           </div>
 
-          {complaint.status !== 'resolved' && (
+          {!isClosed && (
             <div className="mt-8 space-y-3">
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest">Add Comment</div>
               <div className="flex gap-2">
@@ -2866,42 +3085,73 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
                   Send
                 </button>
               </div>
-              {!canComment && (
-                <p className="text-[10px] text-accent font-medium italic">You must wait for a reply before sending another message.</p>
-              )}
             </div>
           )}
         </div>
 
-        {canUpdate && (
+        {canUpdate && !isClosed && (
           <div className="p-8 bg-cream border-t border-border">
             <h3 className="text-sm font-bold uppercase tracking-wider mb-4">Update Status</h3>
-            <div className="flex flex-wrap gap-2">
-              <StatusButton 
-                active={complaint.status === 'pending'} 
-                onClick={() => onUpdateStatus(complaint.id, 'pending')}
-                label="Pending"
-              />
-              <StatusButton 
-                active={complaint.status === 'in-progress'} 
-                onClick={() => onUpdateStatus(complaint.id, 'in-progress')}
-                label="In Progress"
-              />
-              <StatusButton 
-                active={complaint.status === 'resolved'} 
-                onClick={() => onUpdateStatus(complaint.id, 'resolved')}
-                label="Mark Resolved"
-                isSuccess
-              />
-              {userRole === 'admin' && (
+            
+            {showReasonPrompt ? (
+              <div className="space-y-4">
+                <div className="text-xs font-bold text-muted uppercase tracking-widest">Reason for closing (Mandatory)</div>
+                <textarea 
+                  value={closureReason}
+                  onChange={(e) => setClosureReason(e.target.value)}
+                  placeholder="Explain why this complaint is not actionable..."
+                  className="w-full px-4 py-3 bg-white border border-border rounded-xl text-sm outline-none focus:border-accent h-24 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button 
+                    onClick={submitClosure}
+                    disabled={!closureReason.trim()}
+                    className="flex-1 py-3 bg-ink text-white rounded-xl text-xs font-bold hover:bg-accent transition-all disabled:opacity-50"
+                  >
+                    Confirm Closure
+                  </button>
+                  <button 
+                    onClick={() => setShowReasonPrompt(false)}
+                    className="px-6 py-3 bg-white border border-border text-muted rounded-xl text-xs font-bold hover:bg-cream transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
                 <StatusButton 
-                  active={complaint.status === 'rejected'} 
-                  onClick={() => onUpdateStatus(complaint.id, 'rejected')}
-                  label="Reject"
+                  active={complaint.status === 'pending'} 
+                  onClick={() => handleUpdateStatus('pending')}
+                  label="Pending"
+                />
+                <StatusButton 
+                  active={complaint.status === 'in-progress'} 
+                  onClick={() => handleUpdateStatus('in-progress')}
+                  label="In Progress"
+                />
+                <StatusButton 
+                  active={complaint.status === 'resolved'} 
+                  onClick={() => handleUpdateStatus('resolved')}
+                  label="Mark Resolved"
+                  isSuccess
+                />
+                <StatusButton 
+                  active={complaint.status === 'closed-not-actionable'} 
+                  onClick={() => handleUpdateStatus('closed-not-actionable')}
+                  label="Close (Not Actionable)"
                   isDanger
                 />
-              )}
-            </div>
+                {userRole === 'admin' && (
+                  <StatusButton 
+                    active={complaint.status === 'rejected'} 
+                    onClick={() => handleUpdateStatus('rejected')}
+                    label="Reject"
+                    isDanger
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
       </motion.div>
@@ -3072,6 +3322,7 @@ function InsightsView({
   fromDate, toDate, setFromDate, setToDate 
 }: any) {
   const role = user.role;
+  const [timeScale, setTimeScale] = useState<'daily' | 'weekly' | 'monthly' | 'annually'>('weekly');
   
   // Filter complaints by date range
   const filteredComplaints = complaints.filter((c: any) => {
@@ -3079,11 +3330,14 @@ function InsightsView({
     return c.date >= fromDate && c.date <= toDate;
   });
 
+  const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
+
   // Data processing
   const statusData = [
     { name: 'Pending', value: filteredComplaints.filter((c: any) => c.status === 'pending').length, color: '#f59e0b' },
     { name: 'In Progress', value: filteredComplaints.filter((c: any) => c.status === 'in-progress').length, color: '#3b82f6' },
     { name: 'Resolved', value: filteredComplaints.filter((c: any) => c.status === 'resolved').length, color: '#10b981' },
+    { name: 'Closed (N/A)', value: filteredComplaints.filter((c: any) => c.status === 'closed-not-actionable').length, color: '#9ca3af' },
   ];
 
   const categoryData = departments.map((d: any) => ({
@@ -3097,35 +3351,51 @@ function InsightsView({
     { name: 'Low', value: filteredComplaints.filter((c: any) => c.priority === 'low').length, color: '#10b981' },
   ];
 
-  // Mock data for trends (since we don't have historical data yet)
-  const trendData = [
-    { name: 'Week 1', complaints: 4, resolved: 2 },
-    { name: 'Week 2', complaints: 7, resolved: 5 },
-    { name: 'Week 3', complaints: 5, resolved: 4 },
-    { name: 'Week 4', complaints: 9, resolved: 7 },
-  ];
+  // Real data for trends
+  const getTrendData = () => {
+    const counts: Record<string, { total: number, closed: number }> = {};
+    
+    filteredComplaints.forEach((c: any) => {
+      let key = '';
+      const d = new Date(c.date);
+      if (timeScale === 'daily') {
+        key = c.date;
+      } else if (timeScale === 'weekly') {
+        const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
+        key = `Week of ${firstDay.toISOString().split('T')[0]}`;
+      } else if (timeScale === 'monthly') {
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      } else if (timeScale === 'annually') {
+        key = `${d.getFullYear()}`;
+      }
+      
+      if (!counts[key]) counts[key] = { total: 0, closed: 0 };
+      counts[key].total++;
+      if (isClosed(c)) counts[key].closed++;
+    });
 
-  const resolutionTimeData = [
-    { name: 'Jan', time: 4.5 },
-    { name: 'Feb', time: 3.8 },
-    { name: 'Mar', time: 3.2 },
-    { name: 'Apr', time: 2.5 },
-  ];
+    return Object.entries(counts)
+      .map(([name, data]) => ({ name, complaints: data.total, closed: data.closed }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const trendData = getTrendData();
 
   const deptPerformance = departments.map((d: any) => {
     const total = filteredComplaints.filter((c: any) => c.category === d.id).length;
-    const resolved = filteredComplaints.filter((c: any) => c.category === d.id && c.status === 'resolved').length;
-    const rate = total === 0 ? 0 : Math.round((resolved / total) * 100);
+    const closed = filteredComplaints.filter((c: any) => c.category === d.id && isClosed(c)).length;
+    const rate = total === 0 ? 0 : Math.round((closed / total) * 100);
     return { name: d.name.split(' ')[0], rate };
   });
 
   // Area-wise Statistics
-  const areaStats = areas.map(a => {
+  const areaStats = areas.map((a: any) => {
     const area = a.name;
     const areaComplaints = filteredComplaints.filter((c: any) => c.area === area);
     const total = areaComplaints.length;
+    const closed = areaComplaints.filter(isClosed).length;
+    const rate = total === 0 ? 0 : Math.round((closed / total) * 100);
     
-    // Find most common category in this area
     const categoryCounts: Record<string, number> = {};
     areaComplaints.forEach((c: any) => {
       categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1;
@@ -3140,10 +3410,10 @@ function InsightsView({
       }
     });
 
-    return { area, total, topCategory };
-  }).filter(stat => stat.total > 0).sort((a, b) => b.total - a.total);
+    return { area, total, closed, rate, topCategory };
+  }).filter((stat: any) => stat.total > 0).sort((a: any, b: any) => b.total - a.total);
 
-  const areaChartData = areaStats.map(s => ({
+  const areaChartData = areaStats.map((s: any) => ({
     name: s.area.length > 10 ? s.area.substring(0, 10) + '...' : s.area,
     count: s.total,
     fullName: s.area
@@ -3186,8 +3456,11 @@ function InsightsView({
           <div className="text-3xl font-serif text-ink">{filteredComplaints.length}</div>
         </div>
         <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
-          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Resolved</div>
-          <div className="text-3xl font-serif text-emerald-600">{filteredComplaints.filter((c: any) => c.status === 'resolved').length}</div>
+          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Closed (Total)</div>
+          <div className="text-3xl font-serif text-emerald-600">{filteredComplaints.filter(isClosed).length}</div>
+          <div className="text-[10px] text-muted mt-1">
+            {filteredComplaints.filter((c: any) => c.status === 'resolved').length} Resolved / {filteredComplaints.filter((c: any) => c.status === 'closed-not-actionable').length} N/A
+          </div>
         </div>
         <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
           <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">In Progress</div>
@@ -3199,7 +3472,6 @@ function InsightsView({
         </div>
       </div>
 
-      {/* Area-wise Text Stats (Easy to screenshot) */}
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
         <h3 className="text-xl font-serif mb-6 flex items-center gap-2 text-accent">
           <MapPin size={24} />
@@ -3211,44 +3483,64 @@ function InsightsView({
               <div className="text-sm font-bold text-ink mb-1">{stat.area}</div>
               <div className="flex justify-between items-end">
                 <div>
-                  <div className="text-[10px] text-muted uppercase tracking-widest">Total Complaints</div>
-                  <div className="text-2xl font-serif text-accent">{stat.total}</div>
+                  <div className="text-[10px] text-muted uppercase tracking-widest">Total / Closed</div>
+                  <div className="text-2xl font-serif text-accent">{stat.total} <span className="text-sm text-muted">/ {stat.closed}</span></div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] text-muted uppercase tracking-widest">Top Issue</div>
-                  <div className="text-xs font-bold text-ink">{stat.topCategory}</div>
+                  <div className="text-[10px] text-muted uppercase tracking-widest">Resolution Rate</div>
+                  <div className="text-xs font-bold text-emerald-600">{stat.rate}%</div>
                 </div>
               </div>
             </div>
           ))}
           {areaStats.length === 0 && (
             <div className="col-span-full py-8 text-center text-muted italic">
-              No area-wise data available yet.
+              No area-wise data available yet for this range.
             </div>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Area Chart */}
         <div className="bg-white border border-border rounded-2xl p-8 shadow-sm lg:col-span-2">
-          <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-            <BarChart3 size={20} className="text-accent" />
-            Complaints Distribution by Area
-          </h3>
-          <div className="h-[400px]">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-serif flex items-center gap-2">
+              <TrendingUp size={20} className="text-accent" />
+              Complaints Over Time
+            </h3>
+            <div className="flex bg-cream p-1 rounded-lg border border-border">
+              {(['daily', 'weekly', 'monthly', 'annually'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setTimeScale(s)}
+                  className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${timeScale === s ? 'bg-ink text-white shadow-sm' : 'text-muted hover:text-ink'}`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={areaChartData} layout="vertical" margin={{ left: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" axisLine={false} tickLine={false} />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={100} />
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#c8502a" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#c8502a" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#c8502a" radius={[0, 4, 4, 0]} />
-              </BarChart>
+                <Legend />
+                <Area type="monotone" dataKey="complaints" name="Total Complaints" stroke="#c8502a" fill="url(#colorTotal)" strokeWidth={2} />
+                <Area type="monotone" dataKey="closed" name="Closed Issues" stroke="#10b981" fill="transparent" strokeWidth={2} strokeDasharray="5 5" />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
-        {/* Common Charts */}
+
         <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
           <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
             <PieChartIcon size={20} className="text-accent" />
@@ -3279,128 +3571,174 @@ function InsightsView({
 
         <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
           <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-            <TrendingUp size={20} className="text-accent" />
-            Complaints Over Time
+            <LayoutDashboard size={20} className="text-accent" />
+            Department Performance (%)
           </h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
+              <BarChart data={deptPerformance}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
                 <Tooltip />
-                <Area type="monotone" dataKey="complaints" stroke="#c8502a" fill="#c8502a" fillOpacity={0.1} />
-              </AreaChart>
+                <Bar dataKey="rate" name="Closure Rate %" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {role === 'resident' && (
-          <div className="bg-white border border-border rounded-2xl p-8 shadow-sm lg:col-span-2">
-            <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-              <BarChart3 size={20} className="text-accent" />
-              Category-wise Complaints
-            </h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#c8502a" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+function SystemManagementView({ complaints, onBackup, onRestore }: any) {
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [exportFormat, setExportFormat] = useState<'excel' | 'csv'>('excel');
+
+  const handleExport = () => {
+    const filtered = complaints.filter((c: any) => {
+      if (!exportFrom || !exportTo) return true;
+      return c.date >= exportFrom && c.date <= exportTo;
+    });
+
+    const dataToExport = filtered.map((c: any) => ({
+      ID: c.id,
+      Date: c.date,
+      Category: c.category,
+      Subcategory: c.subcategory || 'N/A',
+      Description: c.description,
+      Status: c.status,
+      Priority: c.priority,
+      Resident: c.resident,
+      Address: c.address,
+      Contact: c.contact,
+      Area: c.area || 'N/A',
+      'Bill Ref': c.billReferenceNumber || 'N/A',
+      'Closure Reason': c.closureReason || 'N/A'
+    }));
+
+    const fileName = `mozang_complaints_${new Date().toISOString().split('T')[0]}`;
+
+    if (exportFormat === 'excel') {
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Complaints");
+      XLSX.writeFile(wb, `${fileName}.xlsx`);
+    } else {
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `${fileName}.csv`);
+      link.click();
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">System Management</h1>
+        <p className="text-muted mt-1">Backup, restore, and export portal data.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Backup & Restore */}
+        <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+          <h3 className="text-xl font-serif flex items-center gap-2 text-accent">
+            <Database size={24} />
+            Backup & Restore
+          </h3>
+          <p className="text-sm text-muted leading-relaxed">
+            Download a complete backup of the system database before performing any major updates. 
+            You can restore the system to a previous state by uploading a backup file.
+          </p>
+          
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={onBackup}
+              className="w-full py-4 bg-ink text-white rounded-xl font-bold hover:bg-accent transition-all flex items-center justify-center gap-3 shadow-lg shadow-ink/10"
+            >
+              <Download size={20} /> Download Full Backup
+            </button>
+            
+            <div className="relative">
+              <input 
+                type="file" 
+                accept=".json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onRestore(file);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+              <button className="w-full py-4 bg-white border-2 border-dashed border-border text-ink rounded-xl font-bold hover:bg-cream transition-all flex items-center justify-center gap-3">
+                <Upload size={20} /> Restore from File
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
-        {role === 'officer' && (
-          <>
-            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
-              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-                <Clock size={20} className="text-accent" />
-                Average Resolution Time (Days)
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={resolutionTimeData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="time" stroke="#3b82f6" strokeWidth={3} dot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
-              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-                <ShieldAlert size={20} className="text-accent" />
-                Priority-wise Complaints
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={priorityData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label
-                    >
-                      {priorityData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </>
-        )}
+        {/* Data Export */}
+        <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+          <h3 className="text-xl font-serif flex items-center gap-2 text-accent">
+            <FileText size={24} />
+            Data Export
+          </h3>
+          <p className="text-sm text-muted leading-relaxed">
+            Export complaints data to Excel or CSV for offline reporting and analysis.
+          </p>
 
-        {role === 'admin' && (
-          <>
-            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
-              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-                <Users2 size={20} className="text-accent" />
-                System Usage (Active Users)
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="complaints" stroke="#c8502a" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">From Date</label>
+                <input 
+                  type="date" 
+                  value={exportFrom}
+                  onChange={(e) => setExportFrom(e.target.value)}
+                  className="w-full px-4 py-2 bg-cream border border-border rounded-xl text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-widest">To Date</label>
+                <input 
+                  type="date" 
+                  value={exportTo}
+                  onChange={(e) => setExportTo(e.target.value)}
+                  className="w-full px-4 py-2 bg-cream border border-border rounded-xl text-sm outline-none focus:border-accent"
+                />
               </div>
             </div>
-            <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
-              <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-                <LayoutDashboard size={20} className="text-accent" />
-                Department Performance (%)
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={deptPerformance}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="rate" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Format</label>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setExportFormat('excel')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${exportFormat === 'excel' ? 'bg-accent text-white' : 'bg-cream text-muted hover:text-ink'}`}
+                >
+                  Excel (.xlsx)
+                </button>
+                <button 
+                  onClick={() => setExportFormat('csv')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${exportFormat === 'csv' ? 'bg-accent text-white' : 'bg-cream text-muted hover:text-ink'}`}
+                >
+                  CSV (.csv)
+                </button>
               </div>
             </div>
-          </>
-        )}
+
+            <button 
+              onClick={handleExport}
+              className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-emerald-600/10"
+            >
+              <Download size={20} /> Export Complaints
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
