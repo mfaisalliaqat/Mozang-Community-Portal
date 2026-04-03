@@ -37,6 +37,11 @@ export interface SubCategory {
   name: string;
 }
 
+export interface Area {
+  id: string;
+  name: string;
+}
+
 export interface Complaint {
   id: string;
   category: string;

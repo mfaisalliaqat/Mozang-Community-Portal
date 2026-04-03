@@ -100,6 +100,17 @@ try {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS areas (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_complaints_residentId ON complaints(residentId);
+    CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
+    CREATE INDEX IF NOT EXISTS idx_sub_categories_deptId ON sub_categories(deptId);
+    CREATE INDEX IF NOT EXISTS idx_timeline_complaintId ON timeline(complaintId);
+    CREATE INDEX IF NOT EXISTS idx_suggestions_userId ON suggestions(userId);
   `);
 
   // Migration for existing databases
@@ -133,6 +144,24 @@ if (adminExists.count === 0) {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run('A001', 'System Admin', 'admin@mozang.com', 'admin', 'admin', 'SA', '#c8502a');
   console.log('Seeded initial admin user');
+}
+
+// Seed initial areas if none exist
+const areasExist = db.prepare("SELECT count(*) as count FROM areas").get() as { count: number };
+if (areasExist.count === 0) {
+  const initialAreas = [
+    'Shadab Colony', 'Chiragh Din Road', 'Park Lane', 'Punj Mehal Road',
+    'Temple Road', 'Mozang Road', 'Regal Road', 'Main Bazar',
+    'Mubarak Pura', 'Qila Mehra', 'Muhalla Madahar', 'Badar Din Road',
+    'Nazooli Muhalla', 'Qureshi Muhalla', 'Chah Pichwara', 'Janazgah Road Bazar',
+    'Lytton Road', 'Saadi Park', 'Hari Shah Road', 'Noor Shah Road',
+    'Kanak Mandi', 'Kot Abdullah Shah'
+  ];
+  const insertArea = db.prepare("INSERT INTO areas (id, name) VALUES (?, ?)");
+  initialAreas.forEach((name, index) => {
+    insertArea.run(`area-${index + 1}`, name);
+  });
+  console.log('Seeded initial areas');
 }
 
 // Seed initial departments if none exist
@@ -195,6 +224,12 @@ async function startServer() {
 
   app.post("/api/suggestions", (req, res) => {
     const { id, userId, userName, userContact, description, date, status } = req.body;
+    
+    // Storage optimization: Limit description length
+    if (description && description.length > 1000) {
+      return res.status(400).json({ error: "Description too long (max 1000 chars)" });
+    }
+
     db.prepare("INSERT INTO suggestions (id, userId, userName, userContact, description, date, status) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(id, userId, userName, userContact, description, date, status || 'pending');
     res.json({ success: true });
@@ -229,6 +264,12 @@ async function startServer() {
 
   app.post("/api/users", (req, res) => {
     const { id, name, email, password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
+    
+    // Validation for storage optimization
+    if (name && name.length > 100) return res.status(400).json({ error: "Name too long" });
+    if (email && email.length > 100) return res.status(400).json({ error: "Email too long" });
+    if (address && address.length > 200) return res.status(400).json({ error: "Address too long" });
+
     try {
       db.prepare(`
         INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area)
@@ -366,6 +407,13 @@ async function startServer() {
 
   app.post("/api/complaints", (req, res) => {
     const { id, category, subcategory, description, status, priority, date, resident, residentId, address, contact, area, billReferenceNumber, gpsAddress, lat, lng, timeline } = req.body;
+    
+    // Storage optimization: Limit description length
+    if (description && description.length > 2000) {
+      return res.status(400).json({ error: "Description too long (max 2000 chars)" });
+    }
+    if (address && address.length > 300) return res.status(400).json({ error: "Address too long" });
+
     try {
       const insertComplaint = db.transaction(() => {
         db.prepare(`
@@ -375,7 +423,9 @@ async function startServer() {
         
         const insertTimeline = db.prepare("INSERT INTO timeline (complaintId, time, text, authorId, authorName) VALUES (?, ?, ?, ?, ?)");
         for (const t of timeline) {
-          insertTimeline.run(id, t.time, t.text, t.authorId || residentId, t.authorName || resident);
+          // Limit timeline text
+          const safeText = t.text.substring(0, 500);
+          insertTimeline.run(id, t.time, safeText, t.authorId || residentId, t.authorName || resident);
         }
       });
       insertComplaint();
@@ -427,6 +477,11 @@ async function startServer() {
 
   app.post("/api/announcements", (req, res) => {
     const { id, tag, title, text, date } = req.body;
+    
+    // Storage optimization
+    if (title && title.length > 200) return res.status(400).json({ error: "Title too long" });
+    if (text && text.length > 3000) return res.status(400).json({ error: "Text too long" });
+
     try {
       db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)").run(id, tag, title, text, date);
       res.status(201).json({ success: true });
@@ -442,6 +497,49 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error deleting announcement:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Areas
+  app.get("/api/areas", (req, res) => {
+    try {
+      const areas = db.prepare("SELECT * FROM areas ORDER BY name ASC").all();
+      res.json(areas);
+    } catch (error: any) {
+      console.error('Error fetching areas:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/areas", (req, res) => {
+    const { id, name } = req.body;
+    try {
+      db.prepare("INSERT INTO areas (id, name) VALUES (?, ?)").run(id, name);
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      console.error('Error creating area:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/areas/:id", (req, res) => {
+    const { name } = req.body;
+    try {
+      db.prepare("UPDATE areas SET name = ? WHERE id = ?").run(name, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating area:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/areas/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM areas WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting area:', error);
       res.status(500).json({ error: error.message });
     }
   });

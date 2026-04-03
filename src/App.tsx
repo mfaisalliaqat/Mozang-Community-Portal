@@ -36,7 +36,7 @@ import {
   LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
-import { STATUS_COLORS, PRIORITY_COLORS, AREAS } from './constants';
+import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
 // --- ERROR HANDLING ---
 function handleApiError(error: unknown) {
@@ -110,6 +110,7 @@ function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({
     issues_resolved: '0',
     departments_count: '6'
@@ -144,10 +145,21 @@ function App() {
   // Dept Management
   const [deptName, setDeptName] = useState('');
 
+  // Area Management
+  const [newAreaName, setNewAreaName] = useState('');
+
   // Announcement Management
   const [annTag, setAnnTag] = useState<'Notice' | 'Update' | 'Alert' | 'Event'>('Notice');
   const [annTitle, setAnnTitle] = useState('');
   const [annBody, setAnnBody] = useState('');
+
+  // Insights Date Range
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [lastAnnouncementId, setLastAnnouncementId] = useState<string | null>(() => localStorage.getItem('mozang_last_announcement'));
@@ -210,7 +222,8 @@ function App() {
         { name: 'complaints', url: '/api/complaints' },
         { name: 'announcements', url: '/api/announcements' },
         { name: 'suggestions', url: '/api/suggestions' },
-        { name: 'settings', url: '/api/settings' }
+        { name: 'settings', url: '/api/settings' },
+        { name: 'areas', url: '/api/areas' }
       ];
 
       const results = await Promise.all(endpoints.map(async (e) => {
@@ -227,7 +240,7 @@ function App() {
         return res.json();
       }));
 
-      const [uList, dList, subList, cList, aList, sugList, sList] = results;
+      const [uList, dList, subList, cList, aList, sugList, sList, areaList] = results;
 
       console.log('Data fetched successfully:', {
         users: uList.length,
@@ -236,7 +249,8 @@ function App() {
         complaints: cList.length,
         announcements: aList.length,
         suggestions: sugList.length,
-        settings: Object.keys(sList).length
+        settings: Object.keys(sList).length,
+        areas: areaList.length
       });
 
       setUsers(uList);
@@ -246,6 +260,7 @@ function App() {
       setAnnouncements(aList);
       setSuggestions(sugList);
       setSettings(sList);
+      setAreas(areaList);
 
       if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
     } catch (error) {
@@ -458,6 +473,50 @@ function App() {
       const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete department');
       showToast('Department deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const addArea = async () => {
+    if (!newAreaName) return;
+    const id = `area-${Date.now()}`;
+    try {
+      const res = await fetch('/api/areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: newAreaName })
+      });
+      if (!res.ok) throw new Error('Failed to add area');
+      setNewAreaName('');
+      showToast('Area added');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const updateArea = async (id: string, name: string) => {
+    try {
+      const res = await fetch(`/api/areas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error('Failed to update area');
+      showToast('Area updated');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteArea = async (id: string) => {
+    try {
+      const res = await fetch(`/api/areas/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete area');
+      showToast('Area deleted');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -999,6 +1058,12 @@ function App() {
                       onClick={() => { setCurrentPage('manage-departments'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
+                      icon={<MapPin size={18} />} 
+                      label="Manage Areas" 
+                      active={currentPage === 'manage-areas'} 
+                      onClick={() => { setCurrentPage('manage-areas'); setShowMobileMenu(false); }} 
+                    />
+                    <SidebarItem 
                       icon={<LayoutDashboard size={18} />} 
                       label="Departments Overview" 
                       active={currentPage === 'departments'} 
@@ -1073,6 +1138,7 @@ function App() {
                   newAddress={newAddress} setNewAddress={setNewAddress}
                   newContact={newContact} setNewContact={setNewContact}
                   newArea={newArea} setNewArea={setNewArea}
+                  areas={areas}
                   newDesc={newDesc} setNewDesc={setNewDesc}
                   newBillRef={newBillRef} setNewBillRef={setNewBillRef}
                   onSubmit={submitComplaint}
@@ -1105,6 +1171,11 @@ function App() {
                   complaints={complaints}
                   departments={departments}
                   users={users}
+                  areas={areas}
+                  fromDate={fromDate}
+                  toDate={toDate}
+                  setFromDate={setFromDate}
+                  setToDate={setToDate}
                 />
               )}
               {currentPage === 'my-complaints' && (
@@ -1158,6 +1229,7 @@ function App() {
                   userColor={userColor} setUserColor={setUserColor}
                   editingUserId={editingUserId} setEditingUserId={setEditingUserId}
                   departments={departments}
+                  areas={areas}
                   onAdd={addUser}
                   onUpdate={updateUser}
                   onDelete={deleteUser}
@@ -1185,6 +1257,17 @@ function App() {
                   subCategories={subCategories}
                   onAddSub={addSubCategory}
                   onDeleteSub={deleteSubCategory}
+                  complaints={complaints}
+                />
+              )}
+              {currentPage === 'manage-areas' && (
+                <AdminAreasView 
+                  areas={areas}
+                  newAreaName={newAreaName}
+                  setNewAreaName={setNewAreaName}
+                  onAdd={addArea}
+                  onDelete={deleteArea}
+                  onUpdate={updateArea}
                   complaints={complaints}
                 />
               )}
@@ -1368,8 +1451,8 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
                   <p className="text-muted">Submit your first complaint to get started.</p>
                 </div>
               ) : (
-                mine.slice(0, 4).map((c: any) => (
-                  <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
+                mine.slice(0, 4).map((c: any, idx: number) => (
+                  <ComplaintCard key={c.id} complaint={c} idx={idx} onClick={() => onSelectComplaint(c)} departments={departments} />
                 ))
               )}
             </div>
@@ -1429,8 +1512,8 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
                 <p className="text-muted">No open complaints in your department.</p>
               </div>
             ) : (
-              deptComplaints.filter((c: any) => c.status !== 'resolved').map((c: any) => (
-                <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
+              deptComplaints.filter((c: any) => c.status !== 'resolved').map((c: any, idx: number) => (
+                <ComplaintCard key={c.id} complaint={c} idx={idx} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
           </div>
@@ -1454,8 +1537,8 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
                 <p className="text-muted">Issues you resolve will appear here.</p>
               </div>
             ) : (
-              deptComplaints.filter((c: any) => c.status === 'resolved').slice(0, 3).map((c: any) => (
-                <ComplaintCard key={c.id} complaint={c} onClick={() => onSelectComplaint(c)} departments={departments} />
+              deptComplaints.filter((c: any) => c.status === 'resolved').slice(0, 3).map((c: any, idx: number) => (
+                <ComplaintCard key={c.id} complaint={c} idx={idx} onClick={() => onSelectComplaint(c)} departments={departments} />
               ))
             )}
           </div>
@@ -1548,7 +1631,7 @@ function StatCard({ label, value, color, sub }: any) {
   );
 }
 
-function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: { complaint: Complaint, onClick: () => void, departments: Department[], viewMode?: 'list' | 'card' | 'screenshot', key?: string }) {
+function ComplaintCard({ complaint, onClick, departments, viewMode = 'card', idx }: { complaint: Complaint, onClick: () => void, departments: Department[], viewMode?: 'list' | 'card' | 'screenshot', key?: string, idx: number }) {
   const dept = departments.find(d => d.id === complaint.category);
   
   if (viewMode === 'list') {
@@ -1558,6 +1641,7 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
         className="bg-white border border-border p-4 rounded-xl flex items-center justify-between hover:border-accent transition-all cursor-pointer group"
       >
         <div className="flex items-center gap-4 flex-1 min-w-0">
+          <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded shrink-0">#{idx + 1}</span>
           <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded shrink-0">{complaint.id}</span>
           <h3 className="text-sm font-medium truncate">{complaint.description}</h3>
         </div>
@@ -1581,6 +1665,7 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card' }: {
       onClick={onClick}
       className={`bg-white border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden ${isScreenshot ? 'border-2 border-ink' : ''}`}
     >
+      <div className="absolute top-4 left-4 text-[10px] font-mono text-muted/50">#{idx + 1}</div>
       {isScreenshot && (
         <div className="absolute top-0 right-0 bg-ink text-white px-4 py-1 text-[10px] font-bold uppercase tracking-widest rounded-bl-xl">
           Official Record
@@ -1652,6 +1737,7 @@ function SubmitForm({
   newAddress, setNewAddress, 
   newContact, setNewContact,
   newArea, setNewArea,
+  areas,
   newDesc, setNewDesc, 
   newBillRef, setNewBillRef,
   onSubmit, onCancel,
@@ -1715,6 +1801,7 @@ function SubmitForm({
                 type="text" 
                 value={newAddress}
                 onChange={(e) => setNewAddress(e.target.value)}
+                maxLength={300}
                 className="w-full pl-12 pr-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
                 placeholder="Enter your complete address"
               />
@@ -1729,8 +1816,8 @@ function SubmitForm({
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             >
               <option value="">Select Area</option>
-              {AREAS.map(area => (
-                <option key={area} value={area}>{area}</option>
+              {areas.map((area: any) => (
+                <option key={area.id} value={area.name}>{area.name}</option>
               ))}
             </select>
           </div>
@@ -1741,6 +1828,7 @@ function SubmitForm({
               type="text" 
               value={newContact}
               onChange={(e) => setNewContact(e.target.value)}
+              maxLength={20}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="Enter your contact number"
             />
@@ -1905,10 +1993,11 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments, onBac
             <p className="text-muted">Try adjusting your search or filters.</p>
           </div>
         ) : (
-          filtered.map((c: any) => (
+          filtered.map((c: any, idx: number) => (
             <ComplaintCard 
               key={c.id} 
               complaint={c} 
+              idx={idx}
               onClick={() => onSelect(c)} 
               departments={departments} 
               viewMode={viewMode}
@@ -1981,6 +2070,7 @@ function AdminUsersView({
   userColor, setUserColor,
   editingUserId, setEditingUserId,
   departments, 
+  areas,
   onAdd, 
   onUpdate,
   onDelete 
@@ -2028,6 +2118,7 @@ function AdminUsersView({
               type="text" 
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
+              maxLength={100}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="John Doe"
             />
@@ -2038,6 +2129,7 @@ function AdminUsersView({
               type="email" 
               value={userEmail}
               onChange={(e) => setUserEmail(e.target.value)}
+              maxLength={100}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="john@example.com"
             />
@@ -2048,6 +2140,7 @@ function AdminUsersView({
               type="text" 
               value={userPass}
               onChange={(e) => setUserPass(e.target.value)}
+              maxLength={50}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="••••••••"
             />
@@ -2058,6 +2151,7 @@ function AdminUsersView({
               type="text" 
               value={userContact}
               onChange={(e) => setUserContact(e.target.value)}
+              maxLength={20}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="0300-1234567"
             />
@@ -2068,6 +2162,7 @@ function AdminUsersView({
               type="text" 
               value={userAddress}
               onChange={(e) => setUserAddress(e.target.value)}
+              maxLength={200}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="House #123, Street #456"
             />
@@ -2080,8 +2175,8 @@ function AdminUsersView({
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
             >
               <option value="">Select Area</option>
-              {AREAS.map(area => (
-                <option key={area} value={area}>{area}</option>
+              {areas.map((area: any) => (
+                <option key={area.id} value={area.name}>{area.name}</option>
               ))}
             </select>
           </div>
@@ -2162,6 +2257,7 @@ function AdminUsersView({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-cream border-bottom border-border">
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest w-12">#</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">User</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Role</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Department</th>
@@ -2169,8 +2265,11 @@ function AdminUsersView({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {users.map((u: any) => (
+            {users.map((u: any, idx: number) => (
               <tr key={u.id} className="hover:bg-cream/50 transition-colors">
+                <td className="px-6 py-4 text-xs font-mono text-muted">
+                  {idx + 1}
+                </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div 
@@ -2284,13 +2383,14 @@ function AdminDeptsView({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {departments.map((d: any) => {
+        {departments.map((d: any, idx: number) => {
           const count = complaints.filter((c: any) => c.category === d.id).length;
           const isEditing = editingId === d.id;
           const deptSubs = subCategories.filter((s: any) => s.deptId === d.id);
 
           return (
-            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group flex flex-col">
+            <div key={d.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group flex flex-col relative">
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-muted/50">#{idx + 1}</div>
               <div className="flex justify-between items-start mb-6">
                 <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
                   <Building2 size={24} className="text-accent" />
@@ -2405,6 +2505,125 @@ function AdminDeptsView({
   );
 }
 
+function AdminAreasView({ 
+  areas, 
+  newAreaName, setNewAreaName, 
+  onAdd, onDelete, onUpdate,
+  complaints 
+}: any) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+
+  const handleStartEdit = (area: any) => {
+    setEditingId(area.id);
+    setEditName(area.name);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingId) {
+      onUpdate(editingId, editName);
+      setEditingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Manage Areas</h1>
+        <p className="text-muted mt-1">Add or remove community areas for complaint categorization.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
+        <h3 className="font-bold">Add New Area</h3>
+        <div className="flex flex-wrap gap-6 items-end">
+          <div className="space-y-1.5 flex-1 min-w-[200px]">
+            <label className="text-xs font-semibold tracking-wide">Area Name</label>
+            <input 
+              type="text" 
+              value={newAreaName}
+              onChange={(e) => setNewAreaName(e.target.value)}
+              className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
+              placeholder="e.g. Model Town"
+            />
+          </div>
+          <button 
+            onClick={onAdd}
+            className="px-8 py-3.5 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20"
+          >
+            Add Area
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {areas.map((area: any, idx: number) => {
+          const count = complaints.filter((c: any) => c.area === area.name).length;
+          const isEditing = editingId === area.id;
+
+          return (
+            <div key={area.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm group flex flex-col relative">
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-muted/50">#{idx + 1}</div>
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center text-2xl">
+                  <MapPin size={24} className="text-accent" />
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => handleStartEdit(area)}
+                    className="p-2 text-muted hover:text-accent transition-colors"
+                    title="Edit Area"
+                  >
+                    <ClipboardList size={16} />
+                  </button>
+                  <button 
+                    onClick={() => onDelete(area.id)}
+                    className="p-2 text-muted hover:text-rose-500 transition-colors"
+                    title="Delete Area"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {isEditing ? (
+                <div className="space-y-3 mb-4">
+                  <input 
+                    type="text" 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3 py-2 bg-paper border border-border rounded-lg outline-none focus:border-accent text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={handleSaveEdit}
+                      className="flex-1 py-2 bg-accent text-white rounded-lg text-xs font-bold"
+                    >
+                      Save
+                    </button>
+                    <button 
+                      onClick={() => setEditingId(null)}
+                      className="flex-1 py-2 bg-cream text-ink rounded-lg text-xs font-bold"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h3 className="font-bold text-ink mb-1">{area.name}</h3>
+              )}
+
+              <div className="flex items-center justify-between mt-auto">
+                <span className="text-xs text-muted font-medium uppercase tracking-wider">{count} complaints</span>
+                <span className="text-[10px] font-mono text-muted bg-cream px-2 py-0.5 rounded">ID: {area.id}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AnnouncementsView({ announcements }: any) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -2414,8 +2633,9 @@ function AnnouncementsView({ announcements }: any) {
       </div>
 
       <div className="space-y-4">
-        {announcements.map((a: any) => (
+        {announcements.map((a: any, idx: number) => (
           <div key={a.id} className="bg-ink p-8 rounded-3xl text-white relative overflow-hidden group">
+            <div className="absolute top-4 left-4 text-[10px] font-mono text-white/30">#{idx + 1}</div>
             <div className="absolute top-0 right-0 p-8 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">📢</div>
             <div className="relative z-10">
               <div className="inline-block px-3 py-1 bg-accent/30 text-accent text-[10px] font-bold uppercase tracking-widest rounded-lg mb-4">
@@ -2451,6 +2671,7 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
               type="text" 
               value={annTitle}
               onChange={(e) => setAnnTitle(e.target.value)}
+              maxLength={200}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
               placeholder="Announcement title..."
             />
@@ -2460,9 +2681,11 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
             <textarea 
               value={annBody}
               onChange={(e) => setAnnBody(e.target.value)}
+              maxLength={3000}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors min-h-[100px] resize-none"
               placeholder="Write the announcement..."
             />
+            <div className="text-[10px] text-right text-muted">{annBody.length}/3000</div>
           </div>
           <div className="flex flex-wrap gap-4 items-end">
             <div className="space-y-1.5 flex-1 min-w-[150px]">
@@ -2489,8 +2712,9 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
       </div>
 
       <div className="space-y-4">
-        {announcements.map((a: any) => (
-          <div key={a.id} className="bg-ink p-6 rounded-2xl text-white flex justify-between items-start gap-4">
+        {announcements.map((a: any, idx: number) => (
+          <div key={a.id} className="bg-ink p-6 rounded-2xl text-white flex justify-between items-start gap-4 relative">
+            <div className="absolute top-2 left-2 text-[8px] font-mono text-white/20">#{idx + 1}</div>
             <div className="flex-1">
               <div className="inline-block px-2 py-0.5 bg-accent/30 text-accent text-[9px] font-bold uppercase tracking-widest rounded mb-2">
                 {a.tag}
@@ -2727,9 +2951,11 @@ function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCan
           <textarea 
             value={newSuggestion}
             onChange={(e) => setNewSuggestion(e.target.value)}
+            maxLength={1000}
             className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors min-h-[200px] resize-none"
             placeholder="Describe your suggestion here..."
           />
+          <div className="text-[10px] text-right text-muted">{newSuggestion.length}/1000</div>
         </div>
         <button 
           onClick={onSubmit}
@@ -2743,8 +2969,9 @@ function SubmitSuggestionForm({ newSuggestion, setNewSuggestion, onSubmit, onCan
         <div className="space-y-6">
           <h2 className="text-2xl font-serif">My Suggestions</h2>
           <div className="space-y-4">
-            {mySuggestions.map((s: any) => (
-              <div key={s.id} className="bg-white border border-border p-6 rounded-2xl flex justify-between items-start gap-4 shadow-sm group">
+            {mySuggestions.map((s: any, idx: number) => (
+              <div key={s.id} className="bg-white border border-border p-6 rounded-2xl flex justify-between items-start gap-4 shadow-sm group relative">
+                <div className="absolute top-4 left-4 text-[10px] font-mono text-muted/50">#{idx + 1}</div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.date}</span>
@@ -2792,8 +3019,9 @@ function SuggestionsList({ suggestions, onDelete, onAcknowledge, userRole }: any
             <p className="text-muted">New suggestions will appear here.</p>
           </div>
         ) : (
-          suggestions.map((s: any) => (
-            <div key={s.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex justify-between items-start gap-4 group">
+          suggestions.map((s: any, idx: number) => (
+            <div key={s.id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex justify-between items-start gap-4 group relative">
+              <div className="absolute top-4 left-4 text-[10px] font-mono text-muted/50">#{idx + 1}</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[10px] font-bold text-accent uppercase tracking-widest">{s.userName}</span>
@@ -2835,25 +3063,38 @@ function SuggestionsList({ suggestions, onDelete, onAcknowledge, userRole }: any
   );
 }
 
-function InsightsView({ user, complaints, departments, users }: any) {
+function InsightsView({ 
+  user, 
+  complaints, 
+  departments, 
+  users, 
+  areas, 
+  fromDate, toDate, setFromDate, setToDate 
+}: any) {
   const role = user.role;
   
+  // Filter complaints by date range
+  const filteredComplaints = complaints.filter((c: any) => {
+    if (!fromDate || !toDate) return true;
+    return c.date >= fromDate && c.date <= toDate;
+  });
+
   // Data processing
   const statusData = [
-    { name: 'Pending', value: complaints.filter((c: any) => c.status === 'pending').length, color: '#f59e0b' },
-    { name: 'In Progress', value: complaints.filter((c: any) => c.status === 'in-progress').length, color: '#3b82f6' },
-    { name: 'Resolved', value: complaints.filter((c: any) => c.status === 'resolved').length, color: '#10b981' },
+    { name: 'Pending', value: filteredComplaints.filter((c: any) => c.status === 'pending').length, color: '#f59e0b' },
+    { name: 'In Progress', value: filteredComplaints.filter((c: any) => c.status === 'in-progress').length, color: '#3b82f6' },
+    { name: 'Resolved', value: filteredComplaints.filter((c: any) => c.status === 'resolved').length, color: '#10b981' },
   ];
 
   const categoryData = departments.map((d: any) => ({
     name: d.name.split(' ')[0],
-    count: complaints.filter((c: any) => c.category === d.id).length
+    count: filteredComplaints.filter((c: any) => c.category === d.id).length
   }));
 
   const priorityData = [
-    { name: 'High', value: complaints.filter((c: any) => c.priority === 'high').length, color: '#ef4444' },
-    { name: 'Medium', value: complaints.filter((c: any) => c.priority === 'medium').length, color: '#f59e0b' },
-    { name: 'Low', value: complaints.filter((c: any) => c.priority === 'low').length, color: '#10b981' },
+    { name: 'High', value: filteredComplaints.filter((c: any) => c.priority === 'high').length, color: '#ef4444' },
+    { name: 'Medium', value: filteredComplaints.filter((c: any) => c.priority === 'medium').length, color: '#f59e0b' },
+    { name: 'Low', value: filteredComplaints.filter((c: any) => c.priority === 'low').length, color: '#10b981' },
   ];
 
   // Mock data for trends (since we don't have historical data yet)
@@ -2872,15 +3113,16 @@ function InsightsView({ user, complaints, departments, users }: any) {
   ];
 
   const deptPerformance = departments.map((d: any) => {
-    const total = complaints.filter((c: any) => c.category === d.id).length;
-    const resolved = complaints.filter((c: any) => c.category === d.id && c.status === 'resolved').length;
+    const total = filteredComplaints.filter((c: any) => c.category === d.id).length;
+    const resolved = filteredComplaints.filter((c: any) => c.category === d.id && c.status === 'resolved').length;
     const rate = total === 0 ? 0 : Math.round((resolved / total) * 100);
     return { name: d.name.split(' ')[0], rate };
   });
 
   // Area-wise Statistics
-  const areaStats = AREAS.map(area => {
-    const areaComplaints = complaints.filter((c: any) => c.area === area);
+  const areaStats = areas.map(a => {
+    const area = a.name;
+    const areaComplaints = filteredComplaints.filter((c: any) => c.area === area);
     const total = areaComplaints.length;
     
     // Find most common category in this area
@@ -2909,9 +3151,52 @@ function InsightsView({ user, complaints, departments, users }: any) {
 
   return (
     <div className="space-y-8">
-      <div className="page-header">
-        <h1 className="text-4xl font-serif">Community Insights</h1>
-        <p className="text-muted mt-1">Comprehensive statistics and area-wise performance metrics.</p>
+      <div className="page-header flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h1 className="text-4xl font-serif">Community Insights</h1>
+          <p className="text-muted mt-1">Comprehensive statistics and area-wise performance metrics.</p>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-2xl border border-border shadow-sm">
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-accent" />
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Filter Range:</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input 
+              type="date" 
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-3 py-1.5 bg-paper border border-border rounded-lg text-xs font-medium outline-none focus:border-accent"
+            />
+            <span className="text-muted">to</span>
+            <input 
+              type="date" 
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-1.5 bg-paper border border-border rounded-lg text-xs font-medium outline-none focus:border-accent"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Total Complaints</div>
+          <div className="text-3xl font-serif text-ink">{filteredComplaints.length}</div>
+        </div>
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Resolved</div>
+          <div className="text-3xl font-serif text-emerald-600">{filteredComplaints.filter((c: any) => c.status === 'resolved').length}</div>
+        </div>
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">In Progress</div>
+          <div className="text-3xl font-serif text-blue-600">{filteredComplaints.filter((c: any) => c.status === 'in-progress').length}</div>
+        </div>
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <div className="text-xs font-bold text-muted uppercase tracking-widest mb-1">Pending</div>
+          <div className="text-3xl font-serif text-amber-500">{filteredComplaints.filter((c: any) => c.status === 'pending').length}</div>
+        </div>
       </div>
 
       {/* Area-wise Text Stats (Easy to screenshot) */}
@@ -2921,7 +3206,7 @@ function InsightsView({ user, complaints, departments, users }: any) {
           Area-wise Performance Summary
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {areaStats.map((stat, idx) => (
+          {areaStats.map((stat: any, idx: number) => (
             <div key={idx} className="p-4 bg-cream rounded-xl border border-border/50">
               <div className="text-sm font-bold text-ink mb-1">{stat.area}</div>
               <div className="flex justify-between items-end">
