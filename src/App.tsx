@@ -130,6 +130,7 @@ function App() {
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [analyticsStats, setAnalyticsStats] = useState<any>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [emergencies, setEmergencies] = useState<any[]>([]);
   const [emergencyTypes, setEmergencyTypes] = useState<any[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -413,11 +414,17 @@ function App() {
       setAreas(dataMap.areas || []);
       setEmergencies(dataMap.emergencies || []);
       setEmergencyTypes(dataMap.emergencyTypes || []);
-      if (dataMap.analytics) setAnalyticsStats(dataMap.analytics);
+      if (dataMap.analytics) {
+        setAnalyticsStats(dataMap.analytics);
+        setAnalyticsError(null);
+      }
 
       if (dataMap.departments?.length > 0 && !newCategory) setNewCategory(dataMap.departments[0].id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching data:', error);
+      if (error.message.includes('analytics')) {
+        setAnalyticsError(error.message);
+      }
     }
   };
 
@@ -1311,7 +1318,7 @@ function App() {
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-[10px] shadow-lg shadow-accent/20">
               MCP
             </div>
-            <span>Mozang <span className="text-accent">Community Portal</span></span>
+            <span>Mozang <span className="text-accent">Community Portal</span> <span className="text-[8px] opacity-30 ml-2">v2.1</span></span>
           </div>
         </div>
         
@@ -1811,6 +1818,7 @@ function App() {
                   stats={analyticsStats}
                   complaints={complaints}
                   users={users}
+                  error={analyticsError}
                 />
               )}
             </motion.div>
@@ -3218,7 +3226,17 @@ function AnnouncementsView({ announcements }: any) {
   );
 }
 
-function AdvancedAnalytics({ stats, complaints, users }: any) {
+function AdvancedAnalytics({ stats, complaints, users, error }: any) {
+  if (error) return (
+    <div className="p-12 text-center space-y-4">
+      <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+        <AlertCircle size={32} />
+      </div>
+      <h3 className="text-xl font-serif">Analytics Loading Failed</h3>
+      <p className="text-muted max-w-md mx-auto">{error}</p>
+    </div>
+  );
+  
   if (!stats) return <div className="p-12 text-center">Loading analytics...</div>;
 
   const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5', '#9B59B6'];
@@ -3277,7 +3295,9 @@ function AdvancedAnalytics({ stats, complaints, users }: any) {
             <h3 className="font-bold">Peak Usage</h3>
           </div>
           <p className="text-muted text-sm mb-2">Most active hour of the day:</p>
-          <div className="text-2xl font-serif text-ink">{peakHour}:00 - {parseInt(peakHour) + 1}:00</div>
+          <div className="text-2xl font-serif text-ink">
+            {peakHour === 'N/A' ? 'N/A' : `${peakHour}:00 - ${parseInt(peakHour) + 1}:00`}
+          </div>
           <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Heatmap peak detected</p>
         </div>
 
