@@ -45,6 +45,8 @@ import {
   Trash2,
   Share2,
   CheckCircle,
+  Check,
+  CheckCheck,
   LayoutGrid,
   List
 } from 'lucide-react';
@@ -108,12 +110,29 @@ export default function AppWrapper() {
 }
 
 function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('mozang_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginRole, setLoginRole] = useState<Role>('resident');
+  const [currentPage, setCurrentPage] = useState(() => {
+    return localStorage.getItem('mozang_page') || 'dashboard';
+  });
+
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [analyticsStats, setAnalyticsStats] = useState<any>(null);
   const [emergencies, setEmergencies] = useState<any[]>([]);
+  const [emergencyTypes, setEmergencyTypes] = useState<any[]>([]);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [sessionId] = useState(() => {
     const saved = sessionStorage.getItem('mozang_session_id');
     if (saved) return saved;
@@ -121,6 +140,38 @@ function App() {
     sessionStorage.setItem('mozang_session_id', newId);
     return newId;
   });
+
+  // --- PUSH NOTIFICATIONS ---
+  const subscribeToPush = async () => {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: 'BJOuphg0lDz4c_cNOMxsw4sRr-Mmh_d3hd-dSPMe6ByS9Z2iWp5YOR2Evr3J0oomHNwP7YVtxvy7f2dM3I2tNCU'
+      });
+
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser?.id,
+          subscription: JSON.parse(JSON.stringify(subscription))
+        })
+      });
+      setIsSubscribed(true);
+      console.log('Push subscription successful');
+    } catch (error) {
+      console.error('Push subscription failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser && Notification.permission === 'granted') {
+      subscribeToPush();
+    }
+  }, [currentUser]);
 
   const trackEvent = async (type: string, data: any = {}) => {
     const userAgent = window.navigator.userAgent;
@@ -200,21 +251,6 @@ function App() {
       setShowInstallPrompt(false);
     }
   };
-
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('mozang_user');
-    try {
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  const [loginRole, setLoginRole] = useState<Role>('resident');
-  const [currentPage, setCurrentPage] = useState(() => {
-    return localStorage.getItem('mozang_page') || 'dashboard';
-  });
 
   useEffect(() => {
     trackEvent('page_view');
@@ -344,7 +380,8 @@ function App() {
         { name: 'suggestions', url: '/api/suggestions' },
         { name: 'settings', url: '/api/settings' },
         { name: 'areas', url: '/api/areas' },
-        { name: 'emergencies', url: '/api/emergencies' }
+        { name: 'emergencies', url: '/api/emergencies' },
+        { name: 'emergencyTypes', url: '/api/emergency-types' }
       ];
 
       if (currentUser?.role === 'admin') {
@@ -357,40 +394,28 @@ function App() {
           const text = await res.text();
           throw new Error(`Failed to fetch ${e.name}: ${res.status} ${res.statusText}. Response: ${text.substring(0, 100)}`);
         }
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await res.text();
-          throw new Error(`Expected JSON from ${e.name} but got ${contentType}. Response: ${text.substring(0, 100)}`);
-        }
         return res.json();
       }));
 
-      const [uList, dList, subList, cList, aList, sugList, sList, areaList, eList, stats] = results;
-
-      console.log('Data fetched successfully:', {
-        users: uList.length,
-        depts: dList.length,
-        subs: subList.length,
-        complaints: cList.length,
-        announcements: aList.length,
-        suggestions: sugList.length,
-        settings: Object.keys(sList).length,
-        areas: areaList.length,
-        emergencies: eList?.length || 0
+      // Map results back to named variables
+      const dataMap: any = {};
+      endpoints.forEach((e, i) => {
+        dataMap[e.name] = results[i];
       });
 
-      setUsers(uList);
-      setDepartments(dList);
-      setSubCategories(subList);
-      setComplaints(cList);
-      setAnnouncements(aList);
-      setSuggestions(sugList);
-      setSettings(sList);
-      setAreas(areaList);
-      setEmergencies(eList || []);
-      if (stats) setAnalyticsStats(stats);
+      setUsers(dataMap.users || []);
+      setDepartments(dataMap.departments || []);
+      setSubCategories(dataMap.subcategories || []);
+      setComplaints(dataMap.complaints || []);
+      setAnnouncements(dataMap.announcements || []);
+      setSuggestions(dataMap.suggestions || []);
+      setSettings(dataMap.settings || {});
+      setAreas(dataMap.areas || []);
+      setEmergencies(dataMap.emergencies || []);
+      setEmergencyTypes(dataMap.emergencyTypes || []);
+      if (dataMap.analytics) setAnalyticsStats(dataMap.analytics);
 
-      if (dList.length > 0 && !newCategory) setNewCategory(dList[0].id);
+      if (dataMap.departments?.length > 0 && !newCategory) setNewCategory(dataMap.departments[0].id);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -398,7 +423,7 @@ function App() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentUser?.role]);
 
   useEffect(() => {
     if (currentPage === 'submit' && currentUser) {
@@ -475,6 +500,7 @@ function App() {
       });
       if (!res.ok) throw new Error('Failed to create user');
       showToast('User created');
+      trackEvent('registration', { role: userRole });
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
       setUserAddress(''); setUserContact(''); setUserArea('');
@@ -697,6 +723,7 @@ function App() {
       });
       if (!res.ok) throw new Error('Failed to submit complaint');
       showToast(`Complaint ${id} submitted successfully!`);
+      trackEvent('complaint_submit', { category: newCategory });
       setCurrentPage('my-complaints');
       // Reset form
       setNewAddress('');
@@ -741,6 +768,9 @@ function App() {
       });
       if (!res.ok) throw new Error('Failed to update status');
       showToast(`Status updated to ${status.replace('-', ' ')}`);
+      if (status === 'resolved') {
+        trackEvent('complaint_resolve', { complaintId: id });
+      }
       setSelectedComplaint(null);
       fetchData();
     } catch (e) {
@@ -809,6 +839,24 @@ function App() {
       fetchData();
     } catch (e) {
       handleApiError(e);
+    }
+  };
+
+  const markAsRead = async (complaintId: string) => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch('/api/timeline/read', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          complaintId,
+          userId: currentUser.id
+        })
+      });
+      if (!res.ok) throw new Error('Failed to mark as read');
+      fetchData();
+    } catch (e) {
+      console.error('Error marking as read:', e);
     }
   };
 
@@ -962,6 +1010,32 @@ function App() {
       const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete announcement');
       showToast('Announcement removed.');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const addEmergencyType = async (name: string) => {
+    try {
+      const res = await fetch('/api/emergency-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) throw new Error('Failed to add emergency type');
+      showToast('Emergency type added');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteEmergencyType = async (id: string) => {
+    try {
+      const res = await fetch(`/api/emergency-types/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete emergency type');
+      showToast('Emergency type removed');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -1556,6 +1630,7 @@ function App() {
                   onSelectComplaint={setSelectedComplaint}
                   departments={departments}
                   onReportEmergency={reportEmergency}
+                  emergencyTypes={emergencyTypes}
                 />
               )}
               {currentPage === 'submit' && (
@@ -1726,6 +1801,9 @@ function App() {
                   onUpdateStatus={updateEmergencyStatus}
                   onDelete={deleteEmergency}
                   onReportEmergency={reportEmergency}
+                  emergencyTypes={emergencyTypes}
+                  onAddType={addEmergencyType}
+                  onDeleteType={deleteEmergencyType}
                 />
               )}
               {currentPage === 'advanced-analytics' && (
@@ -1748,6 +1826,7 @@ function App() {
             onClose={() => setSelectedComplaint(null)} 
             onUpdateStatus={updateStatus}
             onAddComment={addComment}
+            onMarkAsRead={markAsRead}
             user={currentUser}
             departments={departments}
           />
@@ -1862,7 +1941,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
   );
 }
 
-function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency }: any) {
+function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency, emergencyTypes }: any) {
   const r = user.role;
   
   const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
@@ -1901,24 +1980,19 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               </div>
             </div>
             <div className="flex flex-wrap justify-center gap-3 w-full md:w-auto">
-              <button 
-                onClick={() => onReportEmergency('Electricity')}
-                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Zap size={18} /> Electricity
-              </button>
-              <button 
-                onClick={() => onReportEmergency('Gas')}
-                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Flame size={18} /> Gas
-              </button>
-              <button 
-                onClick={() => onReportEmergency('Water')}
-                className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Droplets size={18} /> Water
-              </button>
+              {emergencyTypes.map((type: any) => (
+                <button 
+                  key={type.id}
+                  onClick={() => onReportEmergency(type.name)}
+                  className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                >
+                  {type.name === 'Electricity' ? <Zap size={18} /> : 
+                   type.name === 'Gas' ? <Flame size={18} /> : 
+                   type.name === 'Water' ? <Droplets size={18} /> : 
+                   <AlertCircle size={18} />}
+                  {type.name}
+                </button>
+              ))}
             </div>
           </div>
         </motion.div>
@@ -3317,16 +3391,19 @@ function AdvancedAnalytics({ stats, complaints, users }: any) {
   );
 }
 
-function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
+function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAddType, onDeleteType }: any) {
   const [viewMode, setViewMode] = useState<'list' | 'card'>('card');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showTypeManager, setShowTypeManager] = useState(false);
   
   // Form states for manual add
-  const [mType, setMType] = useState('Electricity');
+  const [mType, setMType] = useState(emergencyTypes[0]?.name || 'Electricity');
   const [mName, setMName] = useState('');
   const [mContact, setMContact] = useState('');
   const [mArea, setMArea] = useState('');
   const [mDesc, setMDesc] = useState('');
+
+  const [newTypeName, setNewTypeName] = useState('');
 
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3354,7 +3431,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
   const typeStats = emergencies.reduce((acc: any, e: any) => {
     acc[e.type] = (acc[e.type] || 0) + 1;
     return acc;
-  }, { Electricity: 0, Gas: 0, Water: 0 });
+  }, emergencyTypes.reduce((acc: any, t: any) => ({ ...acc, [t.name]: 0 }), {}));
 
   const maxTypeCount = Math.max(...Object.values(typeStats) as number[]) || 1;
 
@@ -3366,6 +3443,13 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
           <p className="text-muted">Real-time monitoring and officer forwarding.</p>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowTypeManager(!showTypeManager)}
+            className="px-4 py-2.5 bg-cream border border-border text-ink rounded-xl font-bold hover:bg-background transition-all flex items-center gap-2"
+          >
+            <Database size={18} />
+            Types
+          </button>
           <div className="flex bg-white border border-border rounded-xl p-1">
             <button 
               onClick={() => setViewMode('card')}
@@ -3389,6 +3473,48 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
           </button>
         </div>
       </div>
+
+      {showTypeManager && (
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-serif">Manage Emergency Types</h3>
+            <button onClick={() => setShowTypeManager(false)} className="text-muted hover:text-ink"><X size={20} /></button>
+          </div>
+          <div className="flex gap-4">
+            <input 
+              type="text" 
+              value={newTypeName}
+              onChange={(e) => setNewTypeName(e.target.value)}
+              placeholder="Enter new emergency type (e.g. Fire, Medical)"
+              className="flex-1 px-4 py-3 bg-paper border border-border rounded-xl outline-none focus:border-accent"
+            />
+            <button 
+              onClick={() => {
+                if (newTypeName.trim()) {
+                  onAddType(newTypeName.trim());
+                  setNewTypeName('');
+                }
+              }}
+              className="px-8 py-3 bg-accent text-white rounded-xl font-bold"
+            >
+              Add Type
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {emergencyTypes.map((t: any) => (
+              <div key={t.id} className="flex items-center justify-between p-4 bg-cream rounded-2xl border border-border/50">
+                <span className="font-bold text-sm">{t.name}</span>
+                <button 
+                  onClick={() => onDeleteType(t.id)}
+                  className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -3434,9 +3560,9 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${
-                      type === 'Electricity' ? 'bg-yellow-500' : type === 'Gas' ? 'bg-orange-500' : 'bg-blue-500'
+                      type === 'Electricity' ? 'bg-yellow-500' : type === 'Gas' ? 'bg-orange-500' : type === 'Water' ? 'bg-blue-500' : 'bg-accent'
                     }`}>
-                      {type === 'Electricity' ? <Zap size={16} /> : type === 'Gas' ? <Flame size={16} /> : <Droplets size={16} />}
+                      {type === 'Electricity' ? <Zap size={16} /> : type === 'Gas' ? <Flame size={16} /> : type === 'Water' ? <Droplets size={16} /> : <AlertCircle size={16} />}
                     </div>
                     <span className="font-bold">{type}</span>
                   </div>
@@ -3451,7 +3577,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
                     animate={{ width: `${barWidth}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className={`h-full rounded-full ${
-                      type === 'Electricity' ? 'bg-yellow-500' : type === 'Gas' ? 'bg-orange-500' : 'bg-blue-500'
+                      type === 'Electricity' ? 'bg-yellow-500' : type === 'Gas' ? 'bg-orange-500' : type === 'Water' ? 'bg-blue-500' : 'bg-accent'
                     }`}
                   />
                 </div>
@@ -3480,9 +3606,9 @@ function EmergenciesAdmin({ emergencies, onReportEmergency }: any) {
                     onChange={(e) => setMType(e.target.value)}
                     className="w-full px-4 py-3 bg-background border border-border rounded-xl outline-none focus:border-accent"
                   >
-                    <option value="Electricity">Electricity</option>
-                    <option value="Gas">Gas</option>
-                    <option value="Water">Water</option>
+                    {emergencyTypes.map((t: any) => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -3683,13 +3809,19 @@ function AnnouncementsAdmin({ announcements, annTitle, setAnnTitle, annBody, set
   );
 }
 
-function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user, departments }: any) {
+function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, onMarkAsRead, user, departments }: any) {
   const userRole = user.role;
   const canUpdate = userRole === 'admin' || (userRole === 'officer' && user.dept === complaint.category);
   const dept = departments.find((d: any) => d.id === complaint.category);
   const [comment, setComment] = useState('');
   const [showReasonPrompt, setShowReasonPrompt] = useState(false);
   const [closureReason, setClosureReason] = useState('');
+
+  useEffect(() => {
+    if (complaint && onMarkAsRead) {
+      onMarkAsRead(complaint.id);
+    }
+  }, [complaint.id]);
 
   // Sequential commenting logic: anyone can comment anytime now
   const canComment = true;
@@ -3809,7 +3941,18 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, user
                 <div key={i} className="relative">
                   <div className="absolute -left-[21px] top-1.5 w-2 h-2 rounded-full bg-accent border-2 border-paper" />
                   <div className="flex justify-between items-center mb-0.5">
-                    <div className="text-[10px] font-mono text-muted">{t.time}</div>
+                    <div className="text-[10px] font-mono text-muted flex items-center gap-2">
+                      {t.time}
+                      {t.authorId === user.id && (
+                        <span className="flex items-center">
+                          {t.readStatus === 'read' ? (
+                            <CheckCheck size={12} className="text-blue-500" />
+                          ) : (
+                            <Check size={12} className="text-muted" />
+                          )}
+                        </span>
+                      )}
+                    </div>
                     {t.authorName && (
                       <div className="text-[10px] font-bold text-accent uppercase tracking-widest">{t.authorName}</div>
                     )}

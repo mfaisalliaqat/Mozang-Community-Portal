@@ -67,6 +67,27 @@ export interface TimelineItem {
   text: string;
   authorId?: string;
   authorName?: string;
+  readStatus?: number; // 0 for sent, 1 for read
+}
+
+export interface EmergencyType {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface Emergency {
+  id: string;
+  userId: string;
+  userName: string;
+  userContact: string;
+  area: string;
+  type: string;
+  description?: string;
+  status: 'pending' | 'resolved';
+  timestamp: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface Announcement {

@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
+import webpush from "web-push";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,7 +117,22 @@ try {
       text TEXT NOT NULL,
       authorId TEXT,
       authorName TEXT,
+      readStatus INTEGER DEFAULT 0,
       FOREIGN KEY (complaintId) REFERENCES complaints(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS emergency_types (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      icon TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      userId TEXT NOT NULL,
+      endpoint TEXT PRIMARY KEY,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS announcements (
@@ -147,6 +163,7 @@ try {
   // Migration for existing databases
   try { db.prepare("ALTER TABLE timeline ADD COLUMN authorId TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE timeline ADD COLUMN authorName TEXT").run(); } catch (e) {}
+  try { db.prepare("ALTER TABLE timeline ADD COLUMN readStatus INTEGER DEFAULT 0").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN address TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE users ADD COLUMN contact TEXT").run(); } catch (e) {}
   try { db.prepare("ALTER TABLE complaints ADD COLUMN subcategory TEXT").run(); } catch (e) {}
@@ -168,6 +185,19 @@ try {
 } catch (error) {
   console.error('Failed to verify database schema:', error);
   process.exit(1);
+}
+
+// Seed initial emergency types if none exist
+const emergencyTypesExist = db.prepare("SELECT count(*) as count FROM emergency_types").get() as { count: number };
+if (emergencyTypesExist.count === 0) {
+  const types = [
+    { id: 'electricity', name: 'Electricity', icon: 'Zap' },
+    { id: 'gas', name: 'Gas', icon: 'Flame' },
+    { id: 'water', name: 'Water', icon: 'Droplets' }
+  ];
+  const insertType = db.prepare("INSERT INTO emergency_types (id, name, icon) VALUES (?, ?, ?)");
+  types.forEach(t => insertType.run(t.id, t.name, t.icon));
+  console.log('Seeded initial emergency types');
 }
 
 // Seed initial admin if none exists
@@ -241,6 +271,53 @@ if (settingsExist.count === 0) {
   console.log('Seeded initial settings');
 }
 
+// --- PUSH NOTIFICATIONS ---
+const publicVapidKey = process.env.VAPID_PUBLIC_KEY || "BJOuphg0lDz4c_cNOMxsw4sRr-Mmh_d3hd-dSPMe6ByS9Z2iWp5YOR2Evr3J0oomHNwP7YVtxvy7f2dM3I2tNCU";
+const privateVapidKey = process.env.VAPID_PRIVATE_KEY || "HlKIumvVREWa8irL62tX60ViUwXYVHq56TDC53AJSAo";
+
+webpush.setVapidDetails(
+  "mailto:mfaisalliaqat@gmail.com",
+  publicVapidKey,
+  privateVapidKey
+);
+
+async function sendPushNotification(userId: string, payload: any) {
+  try {
+    const subscriptions = db.prepare("SELECT * FROM push_subscriptions WHERE userId = ?").all(userId);
+    const promises = subscriptions.map((sub: any) => {
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: {
+          p256dh: sub.p256dh,
+          auth: sub.auth
+        }
+      };
+      return webpush.sendNotification(pushSubscription, JSON.stringify(payload))
+        .catch(err => {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            // Subscription has expired or is no longer valid
+            db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(sub.endpoint);
+          }
+          console.error('Error sending push notification:', err);
+        });
+    });
+    await Promise.all(promises);
+  } catch (error) {
+    console.error('Failed to send push notifications:', error);
+  }
+}
+
+async function notifyAdminsAndOfficers(payload: any) {
+  try {
+    const users = db.prepare("SELECT id FROM users WHERE role IN ('admin', 'officer')").all();
+    for (const user of users) {
+      await sendPushNotification(user.id, payload);
+    }
+  } catch (error) {
+    console.error('Failed to notify admins/officers:', error);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
@@ -260,6 +337,77 @@ async function startServer() {
   });
 
   // --- API ROUTES ---
+
+  // Push Notifications
+  app.post("/api/push/subscribe", (req, res) => {
+    const { userId, subscription } = req.body;
+    try {
+      db.prepare(`
+        INSERT OR REPLACE INTO push_subscriptions (userId, endpoint, p256dh, auth)
+        VALUES (?, ?, ?, ?)
+      `).run(userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error subscribing to push:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/push/unsubscribe", (req, res) => {
+    const { endpoint } = req.body;
+    try {
+      db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error unsubscribing from push:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Emergency Types
+  app.get("/api/emergency-types", (req, res) => {
+    try {
+      const types = db.prepare("SELECT * FROM emergency_types").all();
+      res.json(types);
+    } catch (error: any) {
+      console.error('Error fetching emergency types:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/emergency-types", (req, res) => {
+    const { id, name, icon } = req.body;
+    try {
+      db.prepare("INSERT INTO emergency_types (id, name, icon) VALUES (?, ?, ?)").run(id, name, icon);
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      console.error('Error creating emergency type:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/emergency-types/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM emergency_types WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting emergency type:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Timeline Read Status
+  app.patch("/api/timeline/read", (req, res) => {
+    const { complaintId, userId } = req.body;
+    try {
+      // Mark all messages in this complaint NOT authored by the current user as read
+      db.prepare("UPDATE timeline SET readStatus = 1 WHERE complaintId = ? AND authorId != ?").run(complaintId, userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error marking timeline as read:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
 
   // Suggestions
   app.get("/api/suggestions", (req, res) => {
@@ -439,7 +587,8 @@ async function startServer() {
           time: t.time, 
           text: t.text,
           authorId: t.authorId,
-          authorName: t.authorName
+          authorName: t.authorName,
+          readStatus: t.readStatus
         }))
       }));
       
@@ -474,6 +623,14 @@ async function startServer() {
         }
       });
       insertComplaint();
+
+      // Notify Admins and Officers
+      notifyAdminsAndOfficers({
+        title: `📝 New Complaint: ${category}`,
+        body: `${resident} submitted a new complaint in ${area || 'Mozang'}.`,
+        data: { url: '/admin-complaints' }
+      });
+
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating complaint:', error);
@@ -484,6 +641,9 @@ async function startServer() {
   app.patch("/api/complaints/:id", (req, res) => {
     const { status, priority, timelineEntry, closureReason } = req.body;
     try {
+      const complaint = db.prepare("SELECT * FROM complaints WHERE id = ?").get(req.params.id);
+      if (!complaint) return res.status(404).json({ error: "Complaint not found" });
+
       const update = db.transaction(() => {
         if (status) {
           if (status === 'resolved' || status === 'closed-not-actionable') {
@@ -502,6 +662,35 @@ async function startServer() {
         }
       });
       update();
+
+      // Notifications
+      if (status && status !== complaint.status) {
+        // Notify resident about status change
+        sendPushNotification(complaint.residentId, {
+          title: `📋 Complaint Update`,
+          body: `Your complaint status has been updated to: ${status}.`,
+          data: { url: '/my-complaints' }
+        });
+      }
+
+      if (timelineEntry) {
+        // If author is resident, notify admins/officers
+        if (timelineEntry.authorId === complaint.residentId) {
+          notifyAdminsAndOfficers({
+            title: `💬 New Message: ${complaint.category}`,
+            body: `${complaint.resident} sent a message regarding complaint #${complaint.id.substring(0, 8)}.`,
+            data: { url: '/admin-complaints' }
+          });
+        } else {
+          // If author is NOT resident, notify resident
+          sendPushNotification(complaint.residentId, {
+            title: `💬 New Message: ${complaint.category}`,
+            body: `An officer sent a message regarding your complaint.`,
+            data: { url: '/my-complaints' }
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error updating complaint:', error);
@@ -588,6 +777,14 @@ async function startServer() {
         INSERT INTO emergencies (id, userId, userName, userContact, area, type, description, timestamp, lat, lng)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, userId, userName, userContact, area, type, description || null, timestamp || new Date().toISOString(), lat || null, lng || null);
+      
+      // Notify Admins and Officers
+      notifyAdminsAndOfficers({
+        title: `🚨 Emergency: ${type}`,
+        body: `${userName} reported an emergency in ${area}.`,
+        data: { url: '/emergencies-admin' }
+      });
+
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating emergency:', error);
