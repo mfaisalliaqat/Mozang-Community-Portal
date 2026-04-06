@@ -169,12 +169,13 @@ function App() {
   };
 
   useEffect(() => {
-    if (currentUser && Notification.permission === 'granted') {
+    if (currentUser && typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'granted') {
       subscribeToPush();
     }
   }, [currentUser]);
 
   const trackEvent = async (type: string, data: any = {}) => {
+    if (typeof window === 'undefined') return;
     const userAgent = window.navigator.userAgent;
     const device = /mobile/i.test(userAgent) ? 'mobile' : 'desktop';
     const browser = /chrome/i.test(userAgent) ? 'chrome' : /safari/i.test(userAgent) ? 'safari' : /firefox/i.test(userAgent) ? 'firefox' : 'other';
@@ -322,8 +323,8 @@ function App() {
   const [lastAnnouncementId, setLastAnnouncementId] = useState<string | null>(() => localStorage.getItem('mozang_last_announcement'));
 
   useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
+    if (typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'default') {
+      (window as any).Notification.requestPermission();
     }
   }, []);
 
@@ -331,8 +332,8 @@ function App() {
     if (announcements.length > 0) {
       const latest = announcements[0];
       if (lastAnnouncementId && latest.id !== lastAnnouncementId) {
-        if (Notification.permission === 'granted') {
-          new Notification('New Announcement: ' + latest.title, {
+        if (typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'granted') {
+          new (window as any).Notification('New Announcement: ' + latest.title, {
             body: latest.text,
             icon: '/favicon.ico'
           });
@@ -958,15 +959,30 @@ function App() {
   const reportEmergency = async (type: string, details?: any) => {
     if (!currentUser) return;
     
+    // Check for duplicate reporting (2 hour cooldown)
+    const area = details?.area || currentUser.area;
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const existing = emergencies.find((e: any) => 
+      e.userId === currentUser.id && 
+      e.type === type && 
+      e.area === area && 
+      e.timestamp > twoHoursAgo
+    );
+
+    if (existing) {
+      showToast('Matter is under process. Please wait, our team is working on it.');
+      return;
+    }
+
     const id = 'E' + Math.random().toString(36).substring(2, 9).toUpperCase();
     const emergency = {
       id,
       userId: currentUser.id,
       userName: details?.userName || currentUser.name,
       userContact: details?.userContact || currentUser.contact,
-      area: details?.area || currentUser.area,
+      area: area,
       type,
-      description: details?.description || `Emergency ${type} reported by ${currentUser.name} in ${currentUser.area}`,
+      description: details?.description || `Emergency ${type} reported by ${currentUser.name} in ${area}`,
       timestamp: new Date().toISOString(),
       status: 'pending'
     };
@@ -1025,10 +1041,12 @@ function App() {
 
   const addEmergencyType = async (name: string) => {
     try {
+      const id = String(Date.now());
+      const icon = 'AlertCircle';
       const res = await fetch('/api/emergency-types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ id, name, icon })
       });
       if (!res.ok) throw new Error('Failed to add emergency type');
       showToast('Emergency type added');
@@ -1403,6 +1421,18 @@ function App() {
                 )}
                 {currentUser.role === 'officer' && (
                   <>
+                    <SidebarItem 
+                      icon={<BarChart3 size={18} />} 
+                      label="Dept Insights" 
+                      active={currentPage === 'insights'} 
+                      onClick={() => { setCurrentPage('insights'); setShowMobileMenu(false); }} 
+                    />
+                    <SidebarItem 
+                      icon={<ShieldAlert size={18} />} 
+                      label="Emergencies" 
+                      active={currentPage === 'emergencies-admin'} 
+                      onClick={() => { setCurrentPage('emergencies-admin'); setShowMobileMenu(false); }} 
+                    />
                     <SidebarItem 
                       icon={<Lightbulb size={18} />} 
                       label="Submit Suggestion" 
@@ -2050,7 +2080,7 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
   }
 
   if (r === 'officer') {
-    const deptComplaints = complaints.filter((c: any) => c.category === user.dept);
+    const deptComplaints = complaints.filter((c: any) => String(c.category) === String(user.dept));
     return (
       <div className="space-y-8">
         <div className="page-header">
@@ -2467,9 +2497,9 @@ function ComplaintsList({ title, list, onSelect, showFilters, departments, onBac
     if (sortBy === 'date') return new Date(b.date).getTime() - new Date(a.date).getTime();
     if (sortBy === 'priority') {
       const p: any = { high: 3, medium: 2, low: 1 };
-      return p[b.priority] - p[a.priority];
+      return (p[b.priority] || 0) - (p[a.priority] || 0);
     }
-    return a.status.localeCompare(b.status);
+    return (a.status || '').localeCompare(b.status || '');
   });
 
   return (
@@ -3244,9 +3274,9 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
   const funnelData = [
     { name: 'Link Clicks', value: stats.funnel.link_clicked },
     { name: 'Page Views', value: stats.funnel.website_opened },
-    { name: 'Registrations', value: stats.funnel.registered },
-    { name: 'Complaints', value: stats.funnel.complaint_submitted },
-    { name: 'Resolved', value: stats.funnel.complaint_resolved },
+    { name: 'Registrations', value: Math.max(stats.funnel.registered, users.length) },
+    { name: 'Complaints', value: Math.max(stats.funnel.complaint_submitted, complaints.length) },
+    { name: 'Resolved', value: Math.max(stats.funnel.complaint_resolved, complaints.filter((c: any) => c.status === 'resolved').length) },
   ];
 
   const deviceData = stats.devices.map((d: any) => ({ name: d.device, value: d.count }));
@@ -3255,11 +3285,11 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
   // Calculate some smart insights
   const mostProblematicArea = complaints.length > 0 
     ? Object.entries(complaints.reduce((acc: any, c: any) => { acc[c.area] = (acc[c.area] || 0) + 1; return acc; }, {}))
-        .sort((a: any, b: any) => b[1] - a[1])[0]?.[0]
+        .sort((a: any, b: any) => (b[1] as number) - (a[1] as number))[0]?.[0]
     : 'N/A';
 
   const peakHour = stats.peak_times.length > 0
-    ? stats.peak_times.sort((a: any, b: any) => b.count - a.count)[0]?.hour
+    ? [...stats.peak_times].sort((a: any, b: any) => b.count - a.count)[0]?.hour
     : 'N/A';
 
   const conversionRate = stats.funnel.link_clicked > 0 
@@ -3415,6 +3445,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
   const [viewMode, setViewMode] = useState<'list' | 'card'>('card');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTypeManager, setShowTypeManager] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<number>(24); // Default 24h
   
   // Form states for manual add
   const [mType, setMType] = useState(emergencyTypes[0]?.name || 'Electricity');
@@ -3442,13 +3473,29 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
   };
 
   // Stats
-  const total = emergencies.length;
-  const areaStats = Object.entries(emergencies.reduce((acc: any, e: any) => {
-    acc[e.area] = (acc[e.area] || 0) + 1;
-    return acc;
-  }, {})).sort((a: any, b: any) => b[1] - a[1]);
+  const now = new Date();
+  const filteredEmergencies = emergencies.filter((e: any) => {
+    const eDate = new Date(e.timestamp);
+    const diffHours = (now.getTime() - eDate.getTime()) / (1000 * 60 * 60);
+    return diffHours <= timeFilter;
+  });
 
-  const typeStats = emergencies.reduce((acc: any, e: any) => {
+  const total = filteredEmergencies.length;
+  
+  // Area Breakdown (Type-wise)
+  const areaBreakdown = filteredEmergencies.reduce((acc: any, e: any) => {
+    if (!acc[e.area]) acc[e.area] = {};
+    acc[e.area][e.type] = (acc[e.area][e.type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const areaStats = Object.entries(areaBreakdown).sort((a: any, b: any) => {
+    const sumA = Object.values(a[1] as any).reduce((s: any, v: any) => s + v, 0) as number;
+    const sumB = Object.values(b[1] as any).reduce((s: any, v: any) => s + v, 0) as number;
+    return sumB - sumA;
+  });
+
+  const typeStats = filteredEmergencies.reduce((acc: any, e: any) => {
     acc[e.type] = (acc[e.type] || 0) + 1;
     return acc;
   }, emergencyTypes.reduce((acc: any, t: any) => ({ ...acc, [t.name]: 0 }), {}));
@@ -3470,6 +3517,17 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
             <Database size={18} />
             Types
           </button>
+          <div className="flex bg-white border border-border rounded-xl p-1">
+            {[1, 2, 5, 24].map(h => (
+              <button
+                key={h}
+                onClick={() => setTimeFilter(h)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${timeFilter === h ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-muted hover:text-ink'}`}
+              >
+                {h}H
+              </button>
+            ))}
+          </div>
           <div className="flex bg-white border border-border rounded-xl p-1">
             <button 
               onClick={() => setViewMode('card')}
@@ -3543,24 +3601,29 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <ShieldAlert size={20} />
             </div>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-60">Total Active</span>
+            <span className="text-xs font-bold uppercase tracking-widest opacity-60">Total Active ({timeFilter}H)</span>
           </div>
           <div className="text-4xl font-serif mb-1">{total}</div>
           <p className="text-white/60 text-sm">Incoming emergencies</p>
         </div>
 
         <div className="bg-white border border-border rounded-3xl p-6 shadow-sm col-span-1 md:col-span-2">
-          <h3 className="text-sm font-bold text-muted uppercase tracking-widest mb-4">Area Breakdown</h3>
+          <h3 className="text-sm font-bold text-muted uppercase tracking-widest mb-4">Area Breakdown (Type-wise)</h3>
           <div className="flex flex-wrap gap-3">
             {areaStats.length === 0 ? (
-              <p className="text-muted text-sm italic">No data available</p>
+              <p className="text-muted text-sm italic">No data available for the last {timeFilter} hours</p>
             ) : (
-              areaStats.map(([area, count]: any) => (
-                <div key={area} className="px-4 py-2 bg-background border border-border rounded-2xl flex items-center gap-3">
-                  <span className="font-bold text-ink">{area}</span>
-                  <span className="w-6 h-6 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {count}
-                  </span>
+              areaStats.map(([area, types]: any) => (
+                <div key={area} className="px-4 py-3 bg-background border border-border rounded-2xl space-y-2 min-w-[140px]">
+                  <div className="font-bold text-ink border-b border-border pb-1 mb-2">{area}</div>
+                  <div className="space-y-1">
+                    {Object.entries(types).map(([type, count]: any) => (
+                      <div key={type} className="flex items-center justify-between text-[10px]">
+                        <span className="text-muted font-medium">{type}</span>
+                        <span className="font-bold text-accent">{count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))
             )}
@@ -3570,7 +3633,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
 
       {/* Poll-like Type Breakdown */}
       <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
-        <h3 className="text-xl font-serif mb-6">Emergency Distribution (Poll View)</h3>
+        <h3 className="text-xl font-serif mb-6">Emergency Distribution (Last {timeFilter}H)</h3>
         <div className="space-y-6">
           {Object.entries(typeStats).map(([type, count]: any) => {
             const percentage = Math.round((count / (total || 1)) * 100);
@@ -4242,10 +4305,13 @@ function InsightsView({
   const role = user.role;
   const [timeScale, setTimeScale] = useState<'daily' | 'weekly' | 'monthly' | 'annually'>('weekly');
   
-  // Filter complaints by date range
+  // Filter complaints by date range and department (for officers)
   const filteredComplaints = complaints.filter((c: any) => {
-    if (!fromDate || !toDate) return true;
-    return c.date >= fromDate && c.date <= toDate;
+    const inDateRange = (!fromDate || !toDate) || (c.date >= fromDate && c.date <= toDate);
+    if (user.role === 'officer') {
+      return inDateRange && String(c.category) === String(user.dept);
+    }
+    return inDateRange;
   });
 
   const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
@@ -4299,12 +4365,13 @@ function InsightsView({
 
   const trendData = getTrendData();
 
-  const deptPerformance = departments.map((d: any) => {
-    const total = filteredComplaints.filter((c: any) => c.category === d.id).length;
-    const closed = filteredComplaints.filter((c: any) => c.category === d.id && isClosed(c)).length;
-    const rate = total === 0 ? 0 : Math.round((closed / total) * 100);
-    return { name: d.name.split(' ')[0], rate };
-  });
+  const deptPerformance = departments
+    .filter((d: any) => user.role !== 'officer' || String(d.id) === String(user.dept))
+    .map((d: any) => {
+      const total = filteredComplaints.filter((c: any) => String(c.category) === String(d.id)).length;
+      const closed = filteredComplaints.filter((c: any) => String(c.category) === String(d.id) && isClosed(c)).length;
+      return { name: d.name, count: total, closed };
+    });
 
   // Area-wise Statistics
   const areaStats = areas.map((a: any) => {
@@ -4312,7 +4379,6 @@ function InsightsView({
     const areaComplaints = filteredComplaints.filter((c: any) => c.area === area);
     const total = areaComplaints.length;
     const closed = areaComplaints.filter(isClosed).length;
-    const rate = total === 0 ? 0 : Math.round((closed / total) * 100);
     
     const categoryCounts: Record<string, number> = {};
     areaComplaints.forEach((c: any) => {
@@ -4328,7 +4394,7 @@ function InsightsView({
       }
     });
 
-    return { area, total, closed, rate, topCategory };
+    return { area, total, closed, topCategory };
   }).filter((stat: any) => stat.total > 0).sort((a: any, b: any) => b.total - a.total);
 
   const areaChartData = areaStats.map((s: any) => ({
@@ -4403,10 +4469,6 @@ function InsightsView({
                 <div>
                   <div className="text-[10px] text-muted uppercase tracking-widest">Total / Closed</div>
                   <div className="text-2xl font-serif text-accent">{stat.total} <span className="text-sm text-muted">/ {stat.closed}</span></div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] text-muted uppercase tracking-widest">Resolution Rate</div>
-                  <div className="text-xs font-bold text-emerald-600">{stat.rate}%</div>
                 </div>
               </div>
             </div>
@@ -4489,17 +4551,26 @@ function InsightsView({
 
         <div className="bg-white border border-border rounded-2xl p-8 shadow-sm">
           <h3 className="text-lg font-serif mb-6 flex items-center gap-2">
-            <LayoutDashboard size={20} className="text-accent" />
-            Department Performance (%)
+            <BarChart3 size={20} className="text-accent" />
+            Department Performance
           </h3>
-          <div className="h-[300px]">
+          <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deptPerformance}>
+              <BarChart data={deptPerformance} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  interval={0} 
+                  height={80} 
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis />
                 <Tooltip />
-                <Bar dataKey="rate" name="Closure Rate %" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Legend verticalAlign="top" />
+                <Bar dataKey="count" name="Total Complaints" fill="#c8502a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="closed" name="Closed Issues" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
