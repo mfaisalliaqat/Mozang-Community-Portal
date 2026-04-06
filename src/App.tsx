@@ -956,8 +956,11 @@ function App() {
     }
   };
 
+  const [reportingEmergency, setReportingEmergency] = useState<string | null>(null);
+
   const reportEmergency = async (type: string, details?: any) => {
     if (!currentUser) return;
+    if (reportingEmergency) return; // Anti-spam cooldown
     
     // Check for duplicate reporting (2 hour cooldown)
     const area = details?.area || currentUser.area;
@@ -974,6 +977,7 @@ function App() {
       return;
     }
 
+    setReportingEmergency(type);
     const id = 'E' + Math.random().toString(36).substring(2, 9).toUpperCase();
     const emergency = {
       id,
@@ -999,6 +1003,9 @@ function App() {
       fetchData();
     } catch (e) {
       handleApiError(e);
+    } finally {
+      // Short cooldown to prevent rapid clicking
+      setTimeout(() => setReportingEmergency(null), 3000);
     }
   };
 
@@ -1039,14 +1046,14 @@ function App() {
     }
   };
 
-  const addEmergencyType = async (name: string) => {
+  const addEmergencyType = async (name: string, deptId: string) => {
     try {
       const id = String(Date.now());
       const icon = 'AlertCircle';
       const res = await fetch('/api/emergency-types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, icon })
+        body: JSON.stringify({ id, name, icon, deptId })
       });
       if (!res.ok) throw new Error('Failed to add emergency type');
       showToast('Emergency type added');
@@ -1668,6 +1675,7 @@ function App() {
                   departments={departments}
                   onReportEmergency={reportEmergency}
                   emergencyTypes={emergencyTypes}
+                  reportingEmergency={reportingEmergency}
                 />
               )}
               {currentPage === 'submit' && (
@@ -1834,6 +1842,7 @@ function App() {
               )}
               {currentPage === 'emergencies-admin' && (
                 <EmergenciesAdmin 
+                  user={currentUser}
                   emergencies={emergencies}
                   onUpdateStatus={updateEmergencyStatus}
                   onDelete={deleteEmergency}
@@ -1841,6 +1850,7 @@ function App() {
                   emergencyTypes={emergencyTypes}
                   onAddType={addEmergencyType}
                   onDeleteType={deleteEmergencyType}
+                  departments={departments}
                 />
               )}
               {currentPage === 'advanced-analytics' && (
@@ -1979,7 +1989,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
   );
 }
 
-function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency, emergencyTypes }: any) {
+function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency, emergencyTypes, reportingEmergency }: any) {
   const r = user.role;
   
   const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
@@ -2021,13 +2031,20 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
               {emergencyTypes.map((type: any) => (
                 <button 
                   key={type.id}
+                  disabled={!!reportingEmergency}
                   onClick={() => onReportEmergency(type.name)}
-                  className="flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold hover:bg-red-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                  className={`flex-1 md:flex-none px-6 py-3 bg-white border-2 border-red-500 text-red-600 rounded-2xl font-bold transition-all shadow-sm flex items-center justify-center gap-2 ${reportingEmergency === type.name ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500 hover:text-white'}`}
                 >
-                  {type.name === 'Electricity' ? <Zap size={18} /> : 
-                   type.name === 'Gas' ? <Flame size={18} /> : 
-                   type.name === 'Water' ? <Droplets size={18} /> : 
-                   <AlertCircle size={18} />}
+                  {reportingEmergency === type.name ? (
+                    <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      {type.name === 'Electricity' ? <Zap size={18} /> : 
+                       type.name === 'Gas' ? <Flame size={18} /> : 
+                       type.name === 'Water' ? <Droplets size={18} /> : 
+                       <AlertCircle size={18} />}
+                    </>
+                  )}
                   {type.name}
                 </button>
               ))}
@@ -3441,7 +3458,7 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
   );
 }
 
-function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAddType, onDeleteType }: any) {
+function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onReportEmergency, emergencyTypes, onAddType, onDeleteType, departments }: any) {
   const [viewMode, setViewMode] = useState<'list' | 'card'>('card');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTypeManager, setShowTypeManager] = useState(false);
@@ -3455,6 +3472,14 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
   const [mDesc, setMDesc] = useState('');
 
   const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeDept, setNewTypeDept] = useState(departments[0]?.id || '');
+
+  // Filter emergencies for officers
+  const filteredByDept = emergencies.filter((e: any) => {
+    if (user.role === 'admin') return true;
+    const typeInfo = emergencyTypes.find((t: any) => t.name === e.type);
+    return typeInfo?.deptId === user.dept;
+  });
 
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3474,7 +3499,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
 
   // Stats
   const now = new Date();
-  const filteredEmergencies = emergencies.filter((e: any) => {
+  const filteredEmergencies = filteredByDept.filter((e: any) => {
     const eDate = new Date(e.timestamp);
     const diffHours = (now.getTime() - eDate.getTime()) / (1000 * 60 * 60);
     return diffHours <= timeFilter;
@@ -3558,7 +3583,7 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
             <h3 className="text-xl font-serif">Manage Emergency Types</h3>
             <button onClick={() => setShowTypeManager(false)} className="text-muted hover:text-ink"><X size={20} /></button>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             <input 
               type="text" 
               value={newTypeName}
@@ -3566,11 +3591,23 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
               placeholder="Enter new emergency type (e.g. Fire, Medical)"
               className="flex-1 px-4 py-3 bg-paper border border-border rounded-xl outline-none focus:border-accent"
             />
+            <select
+              value={newTypeDept}
+              onChange={(e) => setNewTypeDept(e.target.value)}
+              className="px-4 py-3 bg-paper border border-border rounded-xl outline-none focus:border-accent"
+            >
+              <option value="">Select Department</option>
+              {departments.map((d: any) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
             <button 
               onClick={() => {
-                if (newTypeName.trim()) {
-                  onAddType(newTypeName.trim());
+                if (newTypeName.trim() && newTypeDept) {
+                  onAddType(newTypeName.trim(), newTypeDept);
                   setNewTypeName('');
+                } else if (!newTypeDept) {
+                  alert('Please select a department');
                 }
               }}
               className="px-8 py-3 bg-accent text-white rounded-xl font-bold"
@@ -3751,25 +3788,32 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
 
       {/* List / Card View */}
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-4"}>
-        {emergencies.length === 0 ? (
+        {filteredEmergencies.length === 0 ? (
           <div className="col-span-full bg-white border border-border rounded-3xl p-12 text-center">
             <div className="text-4xl mb-4">🛡️</div>
             <h3 className="text-xl font-serif mb-2">No emergencies reported</h3>
             <p className="text-muted">System is clear. All quiet in Mozang.</p>
           </div>
         ) : (
-          emergencies.map((e: any) => (
+          filteredEmergencies.map((e: any) => (
             <div key={e.id} className={`bg-white border border-border rounded-3xl p-6 shadow-sm hover:shadow-md transition-all ${viewMode === 'list' ? 'flex items-center justify-between gap-6' : ''}`}>
               <div className={`space-y-4 ${viewMode === 'list' ? 'flex-1' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
-                    e.type === 'Electricity' ? 'bg-yellow-500' : e.type === 'Gas' ? 'bg-orange-500' : 'bg-blue-500'
-                  }`}>
-                    {e.type === 'Electricity' ? <Zap size={20} /> : e.type === 'Gas' ? <Flame size={20} /> : <Droplets size={20} />}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
+                      e.type === 'Electricity' ? 'bg-yellow-500' : e.type === 'Gas' ? 'bg-orange-500' : 'bg-blue-500'
+                    }`}>
+                      {e.type === 'Electricity' ? <Zap size={20} /> : e.type === 'Gas' ? <Flame size={20} /> : <Droplets size={20} />}
+                    </div>
+                    <div>
+                      <h3 className="font-bold">{e.type} Emergency</h3>
+                      <p className="text-muted text-[10px] uppercase tracking-widest">{new Date(e.timestamp).toLocaleString()}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold">{e.type} Emergency</h3>
-                    <p className="text-muted text-[10px] uppercase tracking-widest">{new Date(e.timestamp).toLocaleString()}</p>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                    e.status === 'pending' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'
+                  }`}>
+                    {e.status}
                   </div>
                 </div>
 
@@ -3792,16 +3836,33 @@ function EmergenciesAdmin({ emergencies, onReportEmergency, emergencyTypes, onAd
               </div>
 
               <div className={`flex gap-2 ${viewMode === 'list' ? 'flex-col min-w-[140px]' : 'mt-6'}`}>
+                {e.status === 'pending' && (
+                  <button 
+                    onClick={() => onUpdateStatus(e.id, 'resolved')}
+                    className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 text-sm"
+                  >
+                    <CheckCircle size={16} /> Resolve
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     const report = `EMERGENCY REPORT\nType: ${e.type}\nArea: ${e.area}\nResident: ${e.userName}\nContact: ${e.userContact}\nTime: ${new Date(e.timestamp).toLocaleString()}\nDescription: ${e.description}`;
                     navigator.clipboard.writeText(report);
+                    // Using a simple alert since showToast isn't passed here
                     alert('Report copied to clipboard for sharing!');
                   }}
                   className="flex-1 py-3 bg-ink text-white rounded-xl font-bold hover:bg-ink/90 transition-all flex items-center justify-center gap-2 text-sm"
                 >
-                  <Share2 size={16} /> Forward to Officer
+                  <Share2 size={16} /> Forward
                 </button>
+                {user.role === 'admin' && (
+                  <button 
+                    onClick={() => onDelete(e.id)}
+                    className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             </div>
           ))

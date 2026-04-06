@@ -124,7 +124,8 @@ try {
     CREATE TABLE IF NOT EXISTS emergency_types (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      icon TEXT NOT NULL
+      icon TEXT NOT NULL,
+      deptId TEXT
     );
 
     CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -191,12 +192,12 @@ try {
 const emergencyTypesExist = db.prepare("SELECT count(*) as count FROM emergency_types").get() as { count: number };
 if (emergencyTypesExist.count === 0) {
   const types = [
-    { id: 'electricity', name: 'Electricity', icon: 'Zap' },
-    { id: 'gas', name: 'Gas', icon: 'Flame' },
-    { id: 'water', name: 'Water', icon: 'Droplets' }
+    { id: 'electricity', name: 'Electricity', icon: 'Zap', deptId: 'electricity' },
+    { id: 'gas', name: 'Gas', icon: 'Flame', deptId: 'gas' },
+    { id: 'water', name: 'Water', icon: 'Droplets', deptId: 'water' }
   ];
-  const insertType = db.prepare("INSERT INTO emergency_types (id, name, icon) VALUES (?, ?, ?)");
-  types.forEach(t => insertType.run(t.id, t.name, t.icon));
+  const insertType = db.prepare("INSERT INTO emergency_types (id, name, icon, deptId) VALUES (?, ?, ?, ?)");
+  types.forEach(t => insertType.run(t.id, t.name, t.icon, t.deptId));
   console.log('Seeded initial emergency types');
 }
 
@@ -376,9 +377,9 @@ async function startServer() {
   });
 
   app.post("/api/emergency-types", (req, res) => {
-    const { id, name, icon } = req.body;
+    const { id, name, icon, deptId } = req.body;
     try {
-      db.prepare("INSERT INTO emergency_types (id, name, icon) VALUES (?, ?, ?)").run(id, name, icon);
+      db.prepare("INSERT INTO emergency_types (id, name, icon, deptId) VALUES (?, ?, ?, ?)").run(id, name, icon, deptId);
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating emergency type:', error);
