@@ -978,10 +978,10 @@ async function startServer() {
     try {
       db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)").run(id, tag, title, text, date);
       
-      // Notify all users via push
-      const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
-      users.forEach(user => {
-        sendPushNotification(user.id, {
+      // Notify only residents via push
+      const residents = db.prepare("SELECT id FROM users WHERE role = 'resident'").all() as { id: string }[];
+      residents.forEach(resident => {
+        sendPushNotification(resident.id, {
           title: `📢 New Announcement: ${title}`,
           body: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
           data: { url: `/announcements?announcementId=${id}` }

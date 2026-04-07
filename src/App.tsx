@@ -1508,7 +1508,7 @@ function App() {
                   onClick={() => { setCurrentPage('dashboard'); setShowMobileMenu(false); }} 
                 />
                 <SidebarItem 
-                  icon={<Megaphone size={18} />} 
+                  icon={<Bell size={18} />} 
                   label="Inbox" 
                   active={currentPage === 'inbox'} 
                   onClick={() => { setCurrentPage('inbox'); setShowMobileMenu(false); }} 
@@ -1636,7 +1636,7 @@ function App() {
             </div>
 
             <div>
-              {currentUser.role !== 'officer' && (
+              {(currentUser.role === 'resident' || currentUser.role === 'admin') && (
                 <>
                   <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Info</div>
                   <div className="space-y-1">
@@ -1969,7 +1969,7 @@ function App() {
                   }}
                 />
               )}
-              {currentPage === 'announcements-admin' && (
+              {currentPage === 'announcements-admin' && currentUser.role === 'admin' && (
                 <AnnouncementsAdmin 
                   announcements={announcements}
                   annTitle={annTitle} setAnnTitle={setAnnTitle}
@@ -1979,7 +1979,7 @@ function App() {
                   onDelete={deleteAnnouncement}
                 />
               )}
-              {currentPage === 'announcements' && (
+              {currentPage === 'announcements' && currentUser.role === 'resident' && (
                 <AnnouncementsView announcements={announcements} />
               )}
               {currentPage === 'emergencies-admin' && (
