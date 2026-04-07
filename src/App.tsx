@@ -448,6 +448,9 @@ function App() {
         if (results[i] && results[i].__error) {
           if (e.name === 'analytics') {
             setAnalyticsError(`Failed to fetch analytics: ${results[i].message}`);
+          } else if (e.name === 'emergencyTypes') {
+            console.error('Failed to fetch emergency types:', results[i].message);
+            showToast('Failed to load emergency types');
           }
         } else {
           dataMap[e.name] = results[i];

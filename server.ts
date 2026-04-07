@@ -424,6 +424,16 @@ async function startServer() {
     }
   });
 
+  app.get("/api/emergency-types", (req, res) => {
+    try {
+      const types = db.prepare("SELECT * FROM emergency_types").all();
+      res.json(types);
+    } catch (error: any) {
+      console.error('Error fetching emergency types:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/emergency-types", (req, res) => {
     const { id, name, icon, deptId } = req.body;
     try {
