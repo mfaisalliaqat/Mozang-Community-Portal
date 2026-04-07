@@ -401,6 +401,7 @@ function App() {
   // --- DATA FETCHING ---
   const fetchData = async () => {
     console.log('Fetching data from API...');
+    const startTime = Date.now();
     try {
       const endpoints = [
         { name: 'users', url: '/api/users' },
@@ -423,19 +424,34 @@ function App() {
         endpoints.push({ name: 'analytics', url: '/api/analytics/stats' });
       }
 
+      console.log(`Starting Promise.all for ${endpoints.length} endpoints...`);
       const results = await Promise.all(endpoints.map(async (e) => {
-        const res = await fetch(e.url);
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Failed to fetch ${e.name}: ${res.status} ${res.statusText}. Response: ${text.substring(0, 100)}`);
+        try {
+          const res = await fetch(e.url);
+          if (!res.ok) {
+            const text = await res.text();
+            console.error(`Failed to fetch ${e.name}:`, res.status, text);
+            return { __error: true, name: e.name, status: res.status, message: text };
+          }
+          return res.json();
+        } catch (err: any) {
+          console.error(`Network error fetching ${e.name}:`, err);
+          return { __error: true, name: e.name, message: err.message };
         }
-        return res.json();
       }));
+
+      console.log(`Data fetched in ${Date.now() - startTime}ms`);
 
       // Map results back to named variables
       const dataMap: any = {};
       endpoints.forEach((e, i) => {
-        dataMap[e.name] = results[i];
+        if (results[i] && results[i].__error) {
+          if (e.name === 'analytics') {
+            setAnalyticsError(`Failed to fetch analytics: ${results[i].message}`);
+          }
+        } else {
+          dataMap[e.name] = results[i];
+        }
       });
 
       setUsers(dataMap.users || []);
@@ -449,17 +465,28 @@ function App() {
       setEmergencies(dataMap.emergencies || []);
       setEmergencyTypes(dataMap.emergencyTypes || []);
       setNotifications(dataMap.notifications || []);
+      
       if (dataMap.analytics) {
         setAnalyticsStats(dataMap.analytics);
         setAnalyticsError(null);
+      } else if (currentUser?.role === 'admin' && !analyticsStats && !analyticsError) {
+        // If it's still null and no error was set, maybe it's just empty
+        setAnalyticsStats({
+          total_events: 0,
+          unique_visitors: 0,
+          devices: [],
+          sources: [],
+          paths: [],
+          browsers: [],
+          os: [],
+          funnel: { link_clicked: 0, website_opened: 0, registered: 0, complaint_submitted: 0, complaint_resolved: 0 },
+          peak_times: []
+        });
       }
 
       if (dataMap.departments?.length > 0 && !newCategory) setNewCategory(dataMap.departments[0].id);
     } catch (error: any) {
-      console.error('Error fetching data:', error);
-      if (error.message.includes('analytics')) {
-        setAnalyticsError(error.message);
-      }
+      console.error('Critical error in fetchData:', error);
     }
   };
 
@@ -853,23 +880,29 @@ function App() {
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const data = JSON.parse(e.target?.result as string);
-        const res = await fetch('/api/restore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        if (res.ok) {
-          showToast('System restored successfully');
-          window.location.reload();
-        } else {
-          showToast('Restore failed');
+        try {
+          const data = JSON.parse(e.target?.result as string);
+          const res = await fetch('/api/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          if (res.ok) {
+            showToast('System restored successfully');
+            setTimeout(() => window.location.reload(), 1500);
+          } else {
+            const errData = await res.json();
+            showToast(`Restore failed: ${errData.message || 'Unknown error'}`);
+          }
+        } catch (err: any) {
+          console.error('Restore processing failed:', err);
+          showToast(`Restore failed: ${err.message}`);
         }
       };
       reader.readAsText(file);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Restore failed:', error);
-      showToast('Restore failed');
+      showToast(`Restore failed: ${error.message}`);
     }
   };
 
@@ -3460,7 +3493,13 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
     </div>
   );
   
-  if (!stats) return <div className="p-12 text-center">Loading analytics...</div>;
+  if (!stats) return (
+    <div className="p-12 text-center space-y-4">
+      <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p className="text-muted">Loading advanced analytics data...</p>
+      <p className="text-xs text-muted/50 italic">This may take a moment for large datasets</p>
+    </div>
+  );
 
   const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5', '#9B59B6'];
 

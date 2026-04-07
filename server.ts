@@ -169,7 +169,9 @@ try {
     CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
     CREATE INDEX IF NOT EXISTS idx_sub_categories_deptId ON sub_categories(deptId);
     CREATE INDEX IF NOT EXISTS idx_timeline_complaintId ON timeline(complaintId);
-    CREATE INDEX IF NOT EXISTS idx_suggestions_userId ON suggestions(userId);
+    CREATE INDEX IF NOT EXISTS idx_analytics_type ON analytics_events(type);
+    CREATE INDEX IF NOT EXISTS idx_analytics_sessionId ON analytics_events(sessionId);
+    CREATE INDEX IF NOT EXISTS idx_analytics_timestamp ON analytics_events(timestamp);
   `);
 
   // Migration for existing databases
@@ -351,7 +353,8 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -778,9 +781,11 @@ async function startServer() {
   });
 
   app.get("/api/analytics/stats", (req, res) => {
+    console.log('Fetching analytics stats...');
     try {
       const stats: any = {};
       
+      const start = Date.now();
       // Basic counts
       stats.total_events = db.prepare("SELECT count(*) as count FROM analytics_events").get().count;
       stats.unique_visitors = db.prepare("SELECT count(DISTINCT sessionId) as count FROM analytics_events").get().count;
@@ -798,8 +803,7 @@ async function startServer() {
       stats.browsers = db.prepare("SELECT browser, count(*) as count FROM analytics_events WHERE browser IS NOT NULL GROUP BY browser").all();
       stats.os = db.prepare("SELECT os, count(*) as count FROM analytics_events WHERE os IS NOT NULL GROUP BY os").all();
       
-      // User Funnel (Link Clicked -> Website Opened -> Registered -> Complaint -> Resolved)
-      // Note: This is a simplified funnel based on event types
+      // User Funnel
       stats.funnel = {
         link_clicked: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'link_click'").get().count,
         website_opened: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'page_view'").get().count,
@@ -808,7 +812,7 @@ async function startServer() {
         complaint_resolved: db.prepare("SELECT count(*) as count FROM analytics_events WHERE type = 'complaint_resolve'").get().count,
       };
 
-      // Peak usage time (hour-wise)
+      // Peak usage time
       stats.peak_times = db.prepare(`
         SELECT strftime('%H', timestamp) as hour, count(*) as count 
         FROM analytics_events 
@@ -816,6 +820,7 @@ async function startServer() {
         ORDER BY hour ASC
       `).all();
 
+      console.log(`Analytics stats fetched in ${Date.now() - start}ms`);
       res.json(stats);
     } catch (error: any) {
       console.error('Error fetching analytics stats:', error);
@@ -881,10 +886,18 @@ async function startServer() {
   // Backup & Restore
   app.get("/api/backup", (req, res) => {
     try {
-      const tables = ['users', 'departments', 'sub_categories', 'complaints', 'suggestions', 'timeline', 'announcements', 'settings', 'areas'];
+      const tables = [
+        'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
+        'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
+        'emergency_types', 'analytics_events', 'notifications'
+      ];
       const backup: any = {};
       for (const table of tables) {
-        backup[table] = db.prepare(`SELECT * FROM ${table}`).all();
+        try {
+          backup[table] = db.prepare(`SELECT * FROM ${table}`).all();
+        } catch (e) {
+          console.warn(`Backup: Table ${table} not found or inaccessible`);
+        }
       }
       res.json(backup);
     } catch (error: any) {
@@ -895,13 +908,23 @@ async function startServer() {
 
   app.post("/api/restore", (req, res) => {
     const backup = req.body;
+    if (!backup || typeof backup !== 'object') {
+      return res.status(400).json({ error: 'Invalid backup data' });
+    }
+
     try {
+      const tables = [
+        'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
+        'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
+        'emergency_types', 'analytics_events', 'notifications'
+      ];
+      
       const restore = db.transaction(() => {
-        // Clear tables
-        const tables = ['users', 'departments', 'sub_categories', 'complaints', 'suggestions', 'timeline', 'announcements', 'settings', 'areas'];
         for (const table of tables) {
-          db.prepare(`DELETE FROM ${table}`).run();
-          if (backup[table]) {
+          if (backup[table] && Array.isArray(backup[table])) {
+            // Clear table
+            db.prepare(`DELETE FROM ${table}`).run();
+            
             const data = backup[table];
             if (data.length > 0) {
               const keys = Object.keys(data[0]);
@@ -911,9 +934,11 @@ async function startServer() {
                 stmt.run(keys.map(k => row[k]));
               }
             }
+            console.log(`Restored table: ${table} (${data.length} rows)`);
           }
         }
       });
+      
       restore();
       res.json({ success: true });
     } catch (error: any) {
