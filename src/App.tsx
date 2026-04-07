@@ -133,6 +133,7 @@ function App() {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [emergencies, setEmergencies] = useState<any[]>([]);
   const [emergencyTypes, setEmergencyTypes] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [sessionId] = useState(() => {
     const saved = sessionStorage.getItem('mozang_session_id');
@@ -353,8 +354,35 @@ function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('mozang_page', currentPage);
-  }, [currentPage]);
+    const handleDeepLinking = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const complaintId = urlParams.get('id');
+      const emergencyId = urlParams.get('emergencyId');
+      const announcementId = urlParams.get('announcementId');
+
+      if (complaintId) {
+        const complaint = complaints.find(c => c.id === complaintId);
+        if (complaint) {
+          setSelectedComplaint(complaint);
+          if (currentUser?.role === 'resident') {
+            setCurrentPage('my-complaints');
+          } else if (currentUser?.role === 'officer') {
+            setCurrentPage('dept-complaints');
+          } else {
+            setCurrentPage('all-complaints');
+          }
+        }
+      } else if (emergencyId) {
+        setCurrentPage('emergencies-admin');
+      } else if (announcementId) {
+        setCurrentPage('announcements');
+      }
+    };
+
+    if (complaints.length > 0) {
+      handleDeepLinking();
+    }
+  }, [complaints, currentUser]);
 
   // Notification for acknowledged suggestions
   useEffect(() => {
@@ -386,6 +414,10 @@ function App() {
         { name: 'emergencyTypes', url: '/api/emergency-types' }
       ];
 
+      if (currentUser) {
+        endpoints.push({ name: 'notifications', url: `/api/notifications/${currentUser.id}` });
+      }
+
       if (currentUser?.role === 'admin') {
         endpoints.push({ name: 'analytics', url: '/api/analytics/stats' });
       }
@@ -415,6 +447,7 @@ function App() {
       setAreas(dataMap.areas || []);
       setEmergencies(dataMap.emergencies || []);
       setEmergencyTypes(dataMap.emergencyTypes || []);
+      setNotifications(dataMap.notifications || []);
       if (dataMap.analytics) {
         setAnalyticsStats(dataMap.analytics);
         setAnalyticsError(null);
@@ -865,6 +898,24 @@ function App() {
       fetchData();
     } catch (e) {
       console.error('Error marking as read:', e);
+    }
+  };
+
+  const markNotificationRead = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      fetchData();
+    } catch (e) {
+      console.error('Failed to mark notification as read', e);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch (e) {
+      console.error('Failed to delete notification', e);
     }
   };
 
@@ -1398,6 +1449,13 @@ function App() {
                   onClick={() => { setCurrentPage('dashboard'); setShowMobileMenu(false); }} 
                 />
                 <SidebarItem 
+                  icon={<Megaphone size={18} />} 
+                  label="Inbox" 
+                  active={currentPage === 'inbox'} 
+                  onClick={() => { setCurrentPage('inbox'); setShowMobileMenu(false); }} 
+                  count={notifications.filter(n => !n.readStatus).length}
+                />
+                <SidebarItem 
                   icon={<BarChart3 size={18} />} 
                   label="Insights" 
                   active={currentPage === 'insights'} 
@@ -1825,9 +1883,31 @@ function App() {
                   onRestore={restoreData}
                 />
               )}
-              {currentPage === 'announcements' && (
-                <AnnouncementsView 
-                  announcements={announcements} 
+              {currentPage === 'inbox' && (
+                <InboxView 
+                  notifications={notifications}
+                  onMarkRead={markNotificationRead}
+                  onDelete={deleteNotification}
+                  onNavigate={(url: string) => {
+                    const [path, query] = url.split('?');
+                    const params = new URLSearchParams(query);
+                    const id = params.get('id');
+                    const emergencyId = params.get('emergencyId');
+                    const announcementId = params.get('announcementId');
+                    
+                    if (id) {
+                      const complaint = complaints.find(c => c.id === id);
+                      if (complaint) {
+                        setSelectedComplaint(complaint);
+                      }
+                    }
+                    
+                    if (path === '/my-complaints') setCurrentPage('my-complaints');
+                    else if (path === '/dept-complaints') setCurrentPage('dept-complaints');
+                    else if (path === '/admin-complaints') setCurrentPage('all-complaints');
+                    else if (path === '/announcements') setCurrentPage('announcements');
+                    else if (path === '/emergencies-admin') setCurrentPage('emergencies-admin');
+                  }}
                 />
               )}
               {currentPage === 'announcements-admin' && (
@@ -3243,6 +3323,79 @@ function AdminAreasView({
   );
 }
 
+function InboxView({ notifications, onMarkRead, onDelete, onNavigate }: any) {
+  return (
+    <div className="space-y-6 pb-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-serif">Inbox</h1>
+          <p className="text-muted">Your notification activity and history.</p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-border rounded-3xl overflow-hidden shadow-sm">
+        {notifications.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-4xl mb-4 opacity-20">📭</div>
+            <h3 className="text-xl font-serif mb-2">Your inbox is empty</h3>
+            <p className="text-muted">No notifications yet. Stay tuned!</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {notifications.map((n: any) => (
+              <div 
+                key={n.id} 
+                className={`p-6 flex items-start gap-4 hover:bg-cream/30 transition-colors ${!n.readStatus ? 'bg-accent/5' : ''}`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  !n.readStatus ? 'bg-accent text-white' : 'bg-cream text-muted'
+                }`}>
+                  {n.title.includes('Complaint') ? <ClipboardList size={20} /> : 
+                   n.title.includes('Announcement') ? <Megaphone size={20} /> : 
+                   <AlertCircle size={20} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className={`font-bold truncate ${!n.readStatus ? 'text-ink' : 'text-muted'}`}>{n.title}</h4>
+                    <span className="text-[10px] text-muted whitespace-nowrap ml-2">{new Date(n.timestamp).toLocaleString()}</span>
+                  </div>
+                  <p className="text-sm text-muted mb-4 line-clamp-2">{n.body}</p>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => {
+                        onMarkRead(n.id);
+                        const data = JSON.parse(n.data || '{}');
+                        if (data.url) onNavigate(data.url);
+                      }}
+                      className="text-xs font-bold text-accent hover:underline flex items-center gap-1"
+                    >
+                      View Details <ArrowRight size={12} />
+                    </button>
+                    {!n.readStatus && (
+                      <button 
+                        onClick={() => onMarkRead(n.id)}
+                        className="text-xs font-bold text-muted hover:text-ink"
+                      >
+                        Mark as Read
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => onDelete(n.id)}
+                      className="text-xs font-bold text-rose-500 hover:text-rose-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AnnouncementsView({ announcements }: any) {
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -3472,7 +3625,13 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
   const [mDesc, setMDesc] = useState('');
 
   const [newTypeName, setNewTypeName] = useState('');
-  const [newTypeDept, setNewTypeDept] = useState(departments[0]?.id || '');
+  const [newTypeDept, setNewTypeDept] = useState('');
+
+  useEffect(() => {
+    if (departments.length > 0 && !newTypeDept) {
+      setNewTypeDept(departments[0].id);
+    }
+  }, [departments]);
 
   // Filter emergencies for officers
   const filteredByDept = emergencies.filter((e: any) => {
@@ -3616,17 +3775,26 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
             </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {emergencyTypes.map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between p-4 bg-cream rounded-2xl border border-border/50">
-                <span className="font-bold text-sm">{t.name}</span>
-                <button 
-                  onClick={() => onDeleteType(t.id)}
-                  className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+            {emergencyTypes.map((t: any) => {
+              const dept = departments.find((d: any) => d.id === t.deptId);
+              return (
+                <div key={t.id} className="flex flex-col p-4 bg-cream rounded-2xl border border-border/50 relative group">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-sm">{t.name}</span>
+                    <button 
+                      onClick={() => onDeleteType(t.id)}
+                      className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted uppercase tracking-widest">
+                    <Building2 size={12} />
+                    {dept?.name || 'No Dept'}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -136,6 +136,17 @@ try {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      data TEXT,
+      readStatus INTEGER DEFAULT 0,
+      timestamp TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS announcements (
       id TEXT PRIMARY KEY,
       tag TEXT NOT NULL,
@@ -284,6 +295,11 @@ webpush.setVapidDetails(
 
 async function sendPushNotification(userId: string, payload: any) {
   try {
+    // Store in notifications table
+    const id = Math.random().toString(36).substring(2, 15);
+    db.prepare("INSERT INTO notifications (id, userId, title, body, data, timestamp) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, userId, payload.title, payload.body, JSON.stringify(payload.data || {}), new Date().toISOString());
+
     const subscriptions = db.prepare("SELECT * FROM push_subscriptions WHERE userId = ?").all(userId);
     const promises = subscriptions.map((sub: any) => {
       const pushSubscription = {
@@ -308,9 +324,17 @@ async function sendPushNotification(userId: string, payload: any) {
   }
 }
 
-async function notifyAdminsAndOfficers(payload: any) {
+async function notifyAdminsAndOfficers(payload: any, deptId?: string) {
   try {
-    const users = db.prepare("SELECT id FROM users WHERE role IN ('admin', 'officer')").all();
+    let query = "SELECT id FROM users WHERE role = 'admin'";
+    const params: any[] = [];
+    if (deptId) {
+      query += " OR (role = 'officer' AND dept = ?)";
+      params.push(deptId);
+    } else {
+      query += " OR role = 'officer'";
+    }
+    const users = db.prepare(query).all(...params) as { id: string }[];
     for (const user of users) {
       await sendPushNotification(user.id, payload);
     }
@@ -365,13 +389,30 @@ async function startServer() {
     }
   });
 
-  // Emergency Types
-  app.get("/api/emergency-types", (req, res) => {
+  // Notifications API
+  app.get("/api/notifications/:userId", (req, res) => {
     try {
-      const types = db.prepare("SELECT * FROM emergency_types").all();
-      res.json(types);
+      const notifications = db.prepare("SELECT * FROM notifications WHERE userId = ? ORDER BY timestamp DESC LIMIT 50").all(req.params.userId);
+      res.json(notifications);
     } catch (error: any) {
-      console.error('Error fetching emergency types:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", (req, res) => {
+    try {
+      db.prepare("UPDATE notifications SET readStatus = 1 WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/notifications/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM notifications WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
@@ -625,12 +666,12 @@ async function startServer() {
       });
       insertComplaint();
 
-      // Notify Admins and Officers
+      // Notify Admins and relevant Officers
       notifyAdminsAndOfficers({
         title: `📝 New Complaint: ${category}`,
         body: `${resident} submitted a new complaint in ${area || 'Mozang'}.`,
-        data: { url: '/admin-complaints' }
-      });
+        data: { url: `/admin-complaints?id=${id}` }
+      }, category); // Assuming category matches deptId for simplicity, or we map it
 
       res.status(201).json({ success: true });
     } catch (error: any) {
@@ -670,7 +711,7 @@ async function startServer() {
         sendPushNotification(complaint.residentId, {
           title: `📋 Complaint Update`,
           body: `Your complaint status has been updated to: ${status}.`,
-          data: { url: '/my-complaints' }
+          data: { url: `/my-complaints?id=${req.params.id}` }
         });
       }
 
@@ -680,14 +721,14 @@ async function startServer() {
           notifyAdminsAndOfficers({
             title: `💬 New Message: ${complaint.category}`,
             body: `${complaint.resident} sent a message regarding complaint #${complaint.id.substring(0, 8)}.`,
-            data: { url: '/admin-complaints' }
-          });
+            data: { url: `/admin-complaints?id=${req.params.id}` }
+          }, complaint.category);
         } else {
           // If author is NOT resident, notify resident
           sendPushNotification(complaint.residentId, {
             title: `💬 New Message: ${complaint.category}`,
             body: `An officer sent a message regarding your complaint.`,
-            data: { url: '/my-complaints' }
+            data: { url: `/my-complaints?id=${req.params.id}` }
           });
         }
       }
@@ -779,12 +820,13 @@ async function startServer() {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, userId, userName, userContact, area, type, description || null, timestamp || new Date().toISOString(), lat || null, lng || null);
       
-      // Notify Admins and Officers
+      // Notify Admins and relevant Officers
+      const typeInfo = db.prepare("SELECT deptId FROM emergency_types WHERE name = ?").get(type) as { deptId: string };
       notifyAdminsAndOfficers({
         title: `🚨 Emergency: ${type}`,
         body: `${userName} reported an emergency in ${area}.`,
-        data: { url: '/emergencies-admin' }
-      });
+        data: { url: `/emergencies-admin?emergencyId=${id}` }
+      }, typeInfo?.deptId);
 
       res.status(201).json({ success: true });
     } catch (error: any) {
@@ -878,6 +920,17 @@ async function startServer() {
 
     try {
       db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)").run(id, tag, title, text, date);
+      
+      // Notify all users via push
+      const users = db.prepare("SELECT id FROM users").all() as { id: string }[];
+      users.forEach(user => {
+        sendPushNotification(user.id, {
+          title: `📢 New Announcement: ${title}`,
+          body: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+          data: { url: `/announcements?announcementId=${id}` }
+        });
+      });
+
       res.status(201).json({ success: true });
     } catch (error: any) {
       console.error('Error creating announcement:', error);
