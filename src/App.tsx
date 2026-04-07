@@ -1979,6 +1979,9 @@ function App() {
                   onDelete={deleteAnnouncement}
                 />
               )}
+              {currentPage === 'announcements' && (
+                <AnnouncementsView announcements={announcements} />
+              )}
               {currentPage === 'emergencies-admin' && (
                 <EmergenciesAdmin 
                   user={currentUser}
@@ -3682,8 +3685,14 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
   const [showTypeManager, setShowTypeManager] = useState(false);
   const [timeFilter, setTimeFilter] = useState<number>(24); // Default 24h
   
+  // Filter relevant types for officers
+  const relevantEmergencyTypes = emergencyTypes.filter((t: any) => {
+    if (user.role === 'admin') return true;
+    return t.deptId === user.dept;
+  });
+
   // Form states for manual add
-  const [mType, setMType] = useState(emergencyTypes[0]?.name || 'Electricity');
+  const [mType, setMType] = useState(relevantEmergencyTypes[0]?.name || 'Electricity');
   const [mName, setMName] = useState('');
   const [mContact, setMContact] = useState('');
   const [mArea, setMArea] = useState('');
@@ -3691,6 +3700,12 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
 
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeDept, setNewTypeDept] = useState('');
+
+  useEffect(() => {
+    if (relevantEmergencyTypes.length > 0 && !mType) {
+      setMType(relevantEmergencyTypes[0].name);
+    }
+  }, [relevantEmergencyTypes]);
 
   useEffect(() => {
     if (departments.length > 0 && !newTypeDept) {
@@ -3701,6 +3716,7 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
   // Filter emergencies for officers
   const filteredByDept = emergencies.filter((e: any) => {
     if (user.role === 'admin') return true;
+    // Check if the emergency type belongs to the officer's department
     const typeInfo = emergencyTypes.find((t: any) => t.name === e.type);
     return typeInfo?.deptId === user.dept;
   });
@@ -3747,7 +3763,7 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
   const typeStats = filteredEmergencies.reduce((acc: any, e: any) => {
     acc[e.type] = (acc[e.type] || 0) + 1;
     return acc;
-  }, emergencyTypes.reduce((acc: any, t: any) => ({ ...acc, [t.name]: 0 }), {}));
+  }, relevantEmergencyTypes.reduce((acc: any, t: any) => ({ ...acc, [t.name]: 0 }), {}));
 
   const maxTypeCount = Math.max(...Object.values(typeStats) as number[]) || 1;
 
@@ -3759,13 +3775,15 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
           <p className="text-muted">Real-time monitoring and officer forwarding.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setShowTypeManager(!showTypeManager)}
-            className="px-4 py-2.5 bg-cream border border-border text-ink rounded-xl font-bold hover:bg-background transition-all flex items-center gap-2"
-          >
-            <Database size={18} />
-            Types
-          </button>
+          {user.role === 'admin' && (
+            <button 
+              onClick={() => setShowTypeManager(!showTypeManager)}
+              className="px-4 py-2.5 bg-cream border border-border text-ink rounded-xl font-bold hover:bg-background transition-all flex items-center gap-2"
+            >
+              <Database size={18} />
+              Types
+            </button>
+          )}
           <div className="flex bg-white border border-border rounded-xl p-1">
             {[1, 2, 5, 24].map(h => (
               <button
@@ -3959,7 +3977,7 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
                     onChange={(e) => setMType(e.target.value)}
                     className="w-full px-4 py-3 bg-background border border-border rounded-xl outline-none focus:border-accent"
                   >
-                    {emergencyTypes.map((t: any) => (
+                    {relevantEmergencyTypes.map((t: any) => (
                       <option key={t.id} value={t.name}>{t.name}</option>
                     ))}
                   </select>
