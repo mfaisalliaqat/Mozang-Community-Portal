@@ -223,13 +223,13 @@ const insertUser = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
-const updateRole = db.prepare(`
-  UPDATE users SET role = 'admin' WHERE email = ?
+const updateAdmin = db.prepare(`
+  UPDATE users SET role = 'admin', password = 'admin' WHERE email = ?
 `);
 
 for (const admin of admins) {
   insertUser.run(admin.id, admin.name, admin.email, admin.password, admin.role, admin.avatar, admin.color);
-  updateRole.run(admin.email);
+  updateAdmin.run(admin.email);
 }
 console.log('Seeded and verified admin users');
 

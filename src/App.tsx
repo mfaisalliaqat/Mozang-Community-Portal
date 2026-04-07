@@ -121,6 +121,7 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginRole, setLoginRole] = useState<Role>('resident');
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(() => {
     return localStorage.getItem('mozang_page') || 'dashboard';
   });
@@ -483,21 +484,27 @@ function App() {
   };
 
   const handleLogin = () => {
+    setLoginError(null);
     const email = loginEmail.trim().toLowerCase();
     console.log('Attempting login with:', { email, loginRole, usersCount: users.length });
+    
+    if (!email || !loginPass) {
+      setLoginError('Please enter both email and password.');
+      return;
+    }
+
     const u = users.find(u => u.email.toLowerCase() === email && u.password === loginPass);
+    
     if (!u) {
       console.log('User not found in:', users.map(u => u.email));
-      showToast('Invalid credentials.');
+      setLoginError('Incorrect email or password.');
       return;
     }
-    if (u.role !== loginRole) {
-      console.log('Role mismatch:', { userRole: u.role, loginRole });
-      showToast('Role mismatch.');
-      return;
-    }
-    
-    console.log('Login successful:', u.name);
+
+    // If user is found, we log them in with their actual role from the database.
+    // The role selector is used as a hint, but we prioritize the database role.
+    // This prevents "Role mismatch" errors for admins who might forget to select the role.
+    console.log('Login successful:', u.name, 'Role:', u.role);
     setCurrentUser(u);
     localStorage.setItem('mozang_user', JSON.stringify(u));
     trackEvent('login');
@@ -1338,6 +1345,16 @@ function App() {
             </div>
 
             <div className="space-y-6">
+              {loginError && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-600 text-sm font-medium"
+                >
+                  <AlertCircle size={18} />
+                  {loginError}
+                </motion.div>
+              )}
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted px-1">Email Address</label>
                 <div className="relative">
