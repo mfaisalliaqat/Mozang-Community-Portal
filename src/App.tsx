@@ -483,32 +483,38 @@ function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoginError(null);
     const email = loginEmail.trim().toLowerCase();
-    console.log('Attempting login with:', { email, loginRole, usersCount: users.length });
     
     if (!email || !loginPass) {
       setLoginError('Please enter both email and password.');
       return;
     }
 
-    const u = users.find(u => u.email.toLowerCase() === email && u.password === loginPass);
-    
-    if (!u) {
-      console.log('User not found in:', users.map(u => u.email));
-      setLoginError('Incorrect email or password.');
-      return;
-    }
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: loginPass })
+      });
 
-    // If user is found, we log them in with their actual role from the database.
-    // The role selector is used as a hint, but we prioritize the database role.
-    // This prevents "Role mismatch" errors for admins who might forget to select the role.
-    console.log('Login successful:', u.name, 'Role:', u.role);
-    setCurrentUser(u);
-    localStorage.setItem('mozang_user', JSON.stringify(u));
-    trackEvent('login');
-    setCurrentPage('dashboard');
+      if (!res.ok) {
+        const data = await res.json();
+        setLoginError(data.error || 'Incorrect email or password.');
+        return;
+      }
+
+      const u = await res.json();
+      console.log('Login successful:', u.name, 'Role:', u.role);
+      setCurrentUser(u);
+      localStorage.setItem('mozang_user', JSON.stringify(u));
+      trackEvent('login');
+      setCurrentPage('dashboard');
+    } catch (e) {
+      console.error('Login error:', e);
+      setLoginError('An error occurred during login. Please try again.');
+    }
   };
 
   const handleLogout = () => {

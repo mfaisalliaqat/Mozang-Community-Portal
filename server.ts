@@ -228,10 +228,14 @@ const updateAdmin = db.prepare(`
 `);
 
 for (const admin of admins) {
-  insertUser.run(admin.id, admin.name, admin.email, admin.password, admin.role, admin.avatar, admin.color);
-  updateAdmin.run(admin.email);
+  try {
+    insertUser.run(admin.id, admin.name, admin.email, admin.password, admin.role, admin.avatar, admin.color);
+    updateAdmin.run(admin.email);
+    console.log(`Verified admin: ${admin.email}`);
+  } catch (e) {
+    console.error(`Error seeding admin ${admin.email}:`, e);
+  }
 }
-console.log('Seeded and verified admin users');
 
 // Seed initial areas if none exist
 const areasExist = db.prepare("SELECT count(*) as count FROM areas").get() as { count: number };
@@ -487,6 +491,24 @@ async function startServer() {
   });
 
   // Users
+  app.post("/api/login", (req, res) => {
+    const { email, password } = req.body;
+    console.log(`Login attempt for: ${email}`);
+    try {
+      const user = db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) AND password = ?").get(email, password);
+      if (user) {
+        console.log(`Login successful for: ${email}`);
+        res.json(user);
+      } else {
+        console.log(`Login failed for: ${email} - Incorrect credentials`);
+        res.status(401).json({ error: "Incorrect email or password." });
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: "Internal server error during login." });
+    }
+  });
+
   app.get("/api/users", (req, res) => {
     try {
       const users = db.prepare("SELECT * FROM users").all();
