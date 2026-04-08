@@ -1295,10 +1295,10 @@ function App() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8 relative z-10 text-center md:text-left"
           >
-            <p className="font-amiri text-white/90 text-lg md:text-xl leading-relaxed mb-2" dir="rtl">
+            <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed mb-2" dir="rtl">
               اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
             </p>
-            <p className="font-amiri text-white/90 text-lg md:text-xl leading-relaxed" dir="rtl">
+            <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed" dir="rtl">
               اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
             </p>
           </motion.div>

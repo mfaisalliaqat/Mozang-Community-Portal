@@ -916,7 +916,7 @@ async function startServer() {
       const tables = [
         'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
         'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
-        'emergency_types', 'analytics_events', 'notifications'
+        'emergency_types', 'analytics_events', 'notifications', 'blood_requests'
       ];
       const backup: any = {};
       for (const table of tables) {
@@ -943,7 +943,7 @@ async function startServer() {
       const tables = [
         'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
         'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
-        'emergency_types', 'analytics_events', 'notifications'
+        'emergency_types', 'analytics_events', 'notifications', 'blood_requests'
       ];
       
       const restore = db.transaction(() => {
