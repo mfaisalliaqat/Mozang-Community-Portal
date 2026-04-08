@@ -107,3 +107,16 @@ export interface Suggestion {
   date: string;
   status: 'pending' | 'acknowledged';
 }
+
+export interface BloodRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  bloodGroup: string;
+  contactNumber: string;
+  hospital: string;
+  urgency: 'Normal' | 'Urgent' | 'Critical';
+  notes?: string;
+  status: 'active' | 'closed' | 'expired';
+  timestamp: string;
+}

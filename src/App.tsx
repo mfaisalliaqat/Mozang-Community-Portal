@@ -56,7 +56,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory } from './types';
+import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory, BloodRequest } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
 // --- ERROR HANDLING ---
@@ -135,6 +135,7 @@ function App() {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [emergencies, setEmergencies] = useState<any[]>([]);
   const [emergencyTypes, setEmergencyTypes] = useState<any[]>([]);
+  const [bloodRequests, setBloodRequests] = useState<BloodRequest[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [sessionId] = useState(() => {
@@ -414,7 +415,8 @@ function App() {
         { name: 'settings', url: '/api/settings' },
         { name: 'areas', url: '/api/areas' },
         { name: 'emergencies', url: '/api/emergencies' },
-        { name: 'emergencyTypes', url: '/api/emergency-types' }
+        { name: 'emergencyTypes', url: '/api/emergency-types' },
+        { name: 'bloodRequests', url: '/api/blood-requests' }
       ];
 
       if (currentUser) {
@@ -468,6 +470,7 @@ function App() {
       setAreas(dataMap.areas || []);
       setEmergencies(dataMap.emergencies || []);
       setEmergencyTypes(dataMap.emergencyTypes || []);
+      setBloodRequests(dataMap.bloodRequests || []);
       setNotifications(dataMap.notifications || []);
       
       if (dataMap.analytics) {
@@ -1021,6 +1024,61 @@ function App() {
       });
       if (!res.ok) throw new Error('Failed to acknowledge suggestion');
       showToast('Suggestion acknowledged');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const submitBloodRequest = async (reqData: any) => {
+    const id = "BR-" + Date.now();
+    const timestamp = new Date().toISOString();
+    const newRequest = {
+      ...reqData,
+      id,
+      userId: currentUser?.id,
+      userName: currentUser?.name,
+      timestamp,
+      status: 'active'
+    };
+
+    try {
+      const res = await fetch('/api/blood-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRequest)
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to submit blood request');
+      }
+      showToast('Blood request submitted and broadcasted!');
+      fetchData();
+    } catch (e: any) {
+      showToast(e.message);
+    }
+  };
+
+  const updateBloodRequestStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`/api/blood-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      showToast('Blood request status updated');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteBloodRequest = async (id: string) => {
+    try {
+      const res = await fetch(`/api/blood-requests/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete blood request');
+      showToast('Blood request deleted');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -1647,6 +1705,12 @@ function App() {
                       active={currentPage === (currentUser.role === 'admin' ? 'announcements-admin' : 'announcements')} 
                       onClick={() => { setCurrentPage(currentUser.role === 'admin' ? 'announcements-admin' : 'announcements'); setShowMobileMenu(false); }} 
                     />
+                    <SidebarItem 
+                      icon={<Droplets size={18} />} 
+                      label="Blood Donation" 
+                      active={currentPage === 'blood-donation'} 
+                      onClick={() => { setCurrentPage('blood-donation'); setShowMobileMenu(false); }} 
+                    />
                     {currentUser.role === 'admin' && (
                       <>
                         <SidebarItem 
@@ -1982,6 +2046,15 @@ function App() {
               )}
               {currentPage === 'announcements' && currentUser.role === 'resident' && (
                 <AnnouncementsView announcements={announcements} />
+              )}
+              {currentPage === 'blood-donation' && (
+                <BloodDonation 
+                  requests={bloodRequests}
+                  user={currentUser}
+                  onSubmit={submitBloodRequest}
+                  onUpdateStatus={updateBloodRequestStatus}
+                  onDelete={deleteBloodRequest}
+                />
               )}
               {currentPage === 'emergencies-admin' && (
                 <EmergenciesAdmin 
@@ -3485,6 +3558,280 @@ function AnnouncementsView({ announcements }: any) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function BloodDonation({ 
+  requests, 
+  user, 
+  onSubmit, 
+  onUpdateStatus, 
+  onDelete 
+}: { 
+  requests: BloodRequest[], 
+  user: User | null, 
+  onSubmit: (data: any) => void, 
+  onUpdateStatus: (id: string, status: string) => void, 
+  onDelete: (id: string) => void 
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [bloodGroup, setBloodGroup] = useState('');
+  const [name, setName] = useState(user?.name || '');
+  const [contact, setContact] = useState(user?.contact || '');
+  const [hospital, setHospital] = useState('');
+  const [urgency, setUrgency] = useState<'Normal' | 'Urgent' | 'Critical'>('Normal');
+  const [notes, setNotes] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bloodGroup || !name || !contact || !hospital) return;
+    onSubmit({ bloodGroup, name, contactNumber: contact, hospital, urgency, notes });
+    setShowForm(false);
+    setBloodGroup('');
+    setHospital('');
+    setUrgency('Normal');
+    setNotes('');
+  };
+
+  const activeRequests = requests.filter(r => r.status === 'active');
+  const closedRequests = requests.filter(r => r.status !== 'active');
+
+  return (
+    <div className="space-y-8">
+      <div className="page-header flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+          <h1 className="text-4xl font-serif text-rose-600 flex items-center gap-3">
+            <Droplets size={36} /> Blood Donation
+          </h1>
+          <p className="text-muted mt-1">Request blood or help others in the community.</p>
+        </div>
+        <button 
+          onClick={() => setShowForm(!showForm)}
+          className="w-full sm:w-auto px-6 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-200"
+        >
+          {showForm ? <X size={20} /> : <Plus size={20} />}
+          {showForm ? 'Cancel' : 'Request Blood'}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showForm && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-white border border-border rounded-3xl p-8 shadow-xl"
+          >
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Blood Group *</label>
+                <select 
+                  required
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none"
+                >
+                  <option value="">Select Blood Group</option>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Urgency Level *</label>
+                <select 
+                  required
+                  value={urgency}
+                  onChange={(e) => setUrgency(e.target.value as any)}
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none"
+                >
+                  <option value="Normal">Normal</option>
+                  <option value="Urgent">Urgent</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Patient/Requester Name *</label>
+                <input 
+                  required
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Full Name"
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number *</label>
+                <input 
+                  required
+                  type="tel"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  placeholder="Phone Number"
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Hospital/Clinic Address *</label>
+                <textarea 
+                  required
+                  value={hospital}
+                  onChange={(e) => setHospital(e.target.value)}
+                  placeholder="Full address of the hospital where blood is required"
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none h-24 resize-none"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Additional Notes</label>
+                <textarea 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Any other details (e.g. number of bottles required)"
+                  className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none h-24 resize-none"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg"
+                >
+                  Submit & Broadcast Request
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-6">
+        <h2 className="text-2xl font-serif flex items-center gap-2">
+          Active Requests <span className="bg-rose-100 text-rose-600 px-3 py-1 rounded-full text-sm">{activeRequests.length}</span>
+        </h2>
+        
+        {activeRequests.length === 0 ? (
+          <div className="bg-white border border-border rounded-3xl p-12 text-center">
+            <div className="text-4xl mb-4 opacity-20">🩸</div>
+            <h3 className="text-xl font-serif mb-2">No active blood requests</h3>
+            <p className="text-muted">Everything seems to be stable in the community.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeRequests.map((req) => (
+              <div 
+                key={req.id} 
+                className={`bg-white border-2 rounded-3xl p-6 shadow-sm transition-all hover:shadow-md ${
+                  req.urgency === 'Critical' ? 'border-rose-500 bg-rose-50/30' : 
+                  req.urgency === 'Urgent' ? 'border-orange-400' : 'border-border'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold ${
+                      req.urgency === 'Critical' ? 'bg-rose-600 text-white' : 
+                      req.urgency === 'Urgent' ? 'bg-orange-500 text-white' : 'bg-cream text-ink'
+                    }`}>
+                      {req.bloodGroup}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
+                          req.urgency === 'Critical' ? 'bg-rose-600 text-white' : 
+                          req.urgency === 'Urgent' ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {req.urgency}
+                        </span>
+                        <span className="text-[10px] text-muted uppercase tracking-widest">{new Date(req.timestamp).toLocaleDateString()}</span>
+                      </div>
+                      <h3 className="font-bold text-lg">{req.userName}</h3>
+                    </div>
+                  </div>
+                  {(user?.role === 'admin' || user?.id === req.userId) && (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => onUpdateStatus(req.id, 'closed')}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Mark as Fulfilled"
+                      >
+                        <CheckCircle size={20} />
+                      </button>
+                      {user?.role === 'admin' && (
+                        <button 
+                          onClick={() => onDelete(req.id)}
+                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Delete Request"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-start gap-2 text-muted">
+                    <MapPin size={16} className="shrink-0 mt-0.5" />
+                    <span>{req.hospital}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted">
+                    <Phone size={16} className="shrink-0" />
+                    <a href={`tel:${req.contactNumber}`} className="font-bold text-ink hover:underline">{req.contactNumber}</a>
+                  </div>
+                  {req.notes && (
+                    <div className="p-3 bg-cream rounded-xl text-xs italic text-muted">
+                      "{req.notes}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {user?.role === 'admin' && closedRequests.length > 0 && (
+        <div className="space-y-6 pt-8 border-t border-border">
+          <h2 className="text-2xl font-serif text-muted">History (Closed/Expired)</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-bold text-muted uppercase tracking-widest border-b border-border">
+                  <th className="pb-4 px-4">Date</th>
+                  <th className="pb-4 px-4">Group</th>
+                  <th className="pb-4 px-4">Requester</th>
+                  <th className="pb-4 px-4">Status</th>
+                  <th className="pb-4 px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {closedRequests.map(req => (
+                  <tr key={req.id} className="text-sm hover:bg-cream/50 transition-colors">
+                    <td className="py-4 px-4 text-muted">{new Date(req.timestamp).toLocaleDateString()}</td>
+                    <td className="py-4 px-4 font-bold">{req.bloodGroup}</td>
+                    <td className="py-4 px-4">{req.userName}</td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                        req.status === 'closed' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <button 
+                        onClick={() => onDelete(req.id)}
+                        className="text-rose-600 hover:underline font-bold text-xs"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -155,6 +155,20 @@ try {
       date TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS blood_requests (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      userName TEXT NOT NULL,
+      bloodGroup TEXT NOT NULL,
+      contactNumber TEXT NOT NULL,
+      hospital TEXT NOT NULL,
+      urgency TEXT NOT NULL,
+      notes TEXT,
+      status TEXT DEFAULT 'active',
+      timestamp TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -1048,6 +1062,96 @@ async function startServer() {
     }
   });
 
+  // Blood Requests
+  app.get("/api/blood-requests", (req, res) => {
+    try {
+      const requests = db.prepare("SELECT * FROM blood_requests ORDER BY timestamp DESC").all();
+      res.json(requests);
+    } catch (error: any) {
+      console.error('Error fetching blood requests:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/blood-requests", (req, res) => {
+    const { id, userId, userName, bloodGroup, contactNumber, hospital, urgency, notes, timestamp } = req.body;
+    
+    try {
+      // Rate limiting: 1 request per user per 2 hours
+      const lastRequest = db.prepare("SELECT timestamp FROM blood_requests WHERE userId = ? ORDER BY timestamp DESC LIMIT 1").get(userId);
+      if (lastRequest) {
+        const lastTime = new Date(lastRequest.timestamp).getTime();
+        const currentTime = new Date(timestamp).getTime();
+        const diffHours = (currentTime - lastTime) / (1000 * 60 * 60);
+        if (diffHours < 2) {
+          return res.status(429).json({ error: "You can only make one blood request every 2 hours." });
+        }
+      }
+
+      db.prepare(`
+        INSERT INTO blood_requests (id, userId, userName, bloodGroup, contactNumber, hospital, urgency, notes, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, userId, userName, bloodGroup, contactNumber, hospital, urgency, notes, timestamp);
+
+      // Broadcast via Announcements
+      const annId = "ann_" + id;
+      const annText = `Blood Required: ${bloodGroup}\nName: ${userName}\nContact: ${contactNumber}\nLocation: ${hospital}\nUrgency: ${urgency}${notes ? '\nNotes: ' + notes : ''}`;
+      db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)")
+        .run(annId, "Emergency", `🩸 Blood Required: ${bloodGroup}`, annText, timestamp.split('T')[0]);
+
+      // Broadcast via Notifications to all residents
+      const residents = db.prepare("SELECT id FROM users WHERE role = 'resident'").all() as { id: string }[];
+      residents.forEach(resident => {
+        if (resident.id !== userId) {
+          db.prepare(`
+            INSERT INTO notifications (id, userId, title, body, data, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            "notif_" + id + "_" + resident.id,
+            resident.id,
+            `🩸 Blood Required: ${bloodGroup}`,
+            `Urgent blood request at ${hospital}. Contact: ${contactNumber}`,
+            JSON.stringify({ url: 'blood-donation', requestId: id }),
+            timestamp
+          );
+          
+          // Also send push if subscribed
+          sendPushNotification(resident.id, {
+            title: `🩸 Blood Required: ${bloodGroup}`,
+            body: `Urgent blood request at ${hospital}. Contact: ${contactNumber}`,
+            data: { url: `/blood-donation?id=${id}` }
+          });
+        }
+      });
+
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      console.error('Error creating blood request:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/blood-requests/:id", (req, res) => {
+    const { status } = req.body;
+    try {
+      db.prepare("UPDATE blood_requests SET status = ? WHERE id = ?").run(status, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating blood request:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/blood-requests/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM blood_requests WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting blood request:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Settings
   app.get("/api/settings", (req, res) => {
     try {
@@ -1115,6 +1219,21 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Cleanup expired blood requests (48 hours)
+  const cleanupBloodRequests = () => {
+    try {
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      db.prepare("UPDATE blood_requests SET status = 'expired' WHERE status = 'active' AND timestamp < ?").run(fortyEightHoursAgo);
+      console.log('Cleaned up expired blood requests');
+    } catch (error) {
+      console.error('Error cleaning up blood requests:', error);
+    }
+  };
+  
+  // Run cleanup every hour
+  setInterval(cleanupBloodRequests, 60 * 60 * 1000);
+  cleanupBloodRequests();
 }
 
 startServer();
