@@ -774,9 +774,12 @@ async function startServer() {
           }, complaint.category);
         } else {
           // If author is NOT resident, notify resident
+          const author = db.prepare("SELECT role FROM users WHERE id = ?").get(timelineEntry.authorId) as { role: string } | undefined;
+          const senderTitle = author?.role === 'admin' ? 'Admin' : 'Officer';
+          
           sendPushNotification(complaint.residentId, {
             title: `💬 New Message: ${complaint.category}`,
-            body: `An officer sent a message regarding your complaint #${complaint.id.substring(0, 8)}.`,
+            body: `A ${senderTitle} sent a message regarding your complaint #${complaint.id.substring(0, 8)}.`,
             data: { url: `/my-complaints?id=${req.params.id}` }
           });
         }
@@ -1099,16 +1102,16 @@ async function startServer() {
       db.prepare("INSERT INTO announcements (id, tag, title, text, date) VALUES (?, ?, ?, ?, ?)")
         .run(annId, "Emergency", `🩸 Blood Required: ${bloodGroup}`, annText, timestamp.split('T')[0]);
 
-      // Broadcast via Notifications to all residents
-      const residents = db.prepare("SELECT id FROM users WHERE role = 'resident'").all() as { id: string }[];
-      residents.forEach(resident => {
-        if (resident.id !== userId) {
+      // Broadcast via Notifications to all residents and admins
+      const targets = db.prepare("SELECT id FROM users WHERE role IN ('resident', 'admin')").all() as { id: string }[];
+      targets.forEach(target => {
+        if (target.id !== userId) {
           db.prepare(`
             INSERT INTO notifications (id, userId, title, body, data, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
           `).run(
-            "notif_" + id + "_" + resident.id,
-            resident.id,
+            "notif_" + id + "_" + target.id,
+            target.id,
             `🩸 Blood Required: ${bloodGroup}`,
             `Urgent blood request at ${hospital}. Contact: ${contactNumber}`,
             JSON.stringify({ url: 'blood-donation', requestId: id }),
@@ -1116,7 +1119,7 @@ async function startServer() {
           );
           
           // Also send push if subscribed
-          sendPushNotification(resident.id, {
+          sendPushNotification(target.id, {
             title: `🩸 Blood Required: ${bloodGroup}`,
             body: `Urgent blood request at ${hospital}. Contact: ${contactNumber}`,
             data: { url: `/blood-donation?id=${id}` }

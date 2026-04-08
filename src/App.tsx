@@ -523,6 +523,9 @@ function App() {
 
   useEffect(() => {
     fetchData();
+    // Real-time updates: fetch data every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, [currentUser?.role]);
 
   useEffect(() => {
@@ -1580,7 +1583,7 @@ function App() {
 
       <div className="flex flex-1 relative">
         {/* Sidebar */}
-        <aside className={`w-64 bg-cream border-r border-border p-6 fixed inset-y-0 left-0 z-[60] md:relative md:block transition-transform duration-300 transform ${showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <aside className={`w-64 bg-cream border-r border-border p-6 fixed inset-y-0 left-0 z-[60] md:relative md:block transition-transform duration-300 transform ${showMobileMenu ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} overflow-y-auto`}>
           <div className="space-y-8">
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Main</div>
@@ -1772,7 +1775,7 @@ function App() {
                   </div>
                 </button>
 
-                {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+                {!isSubscribed && notificationPermission !== 'unsupported' && (
                   <button
                     onClick={subscribeToPush}
                     className="w-full p-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 rounded-2xl flex items-center gap-3 transition-all group"
