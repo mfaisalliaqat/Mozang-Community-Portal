@@ -776,7 +776,7 @@ async function startServer() {
           // If author is NOT resident, notify resident
           sendPushNotification(complaint.residentId, {
             title: `💬 New Message: ${complaint.category}`,
-            body: `An officer sent a message regarding your complaint.`,
+            body: `An officer sent a message regarding your complaint #${complaint.id.substring(0, 8)}.`,
             data: { url: `/my-complaints?id=${req.params.id}` }
           });
         }

@@ -138,6 +138,9 @@ function App() {
   const [bloodRequests, setBloodRequests] = useState<BloodRequest[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
   const [sessionId] = useState(() => {
     const saved = sessionStorage.getItem('mozang_session_id');
     if (saved) return saved;
@@ -166,14 +169,35 @@ function App() {
         })
       });
       setIsSubscribed(true);
+      setNotificationPermission('granted');
       console.log('Push subscription successful');
     } catch (error) {
       console.error('Push subscription failed:', error);
     }
   };
 
+  const unsubscribeFromPush = async () => {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint })
+        });
+        await subscription.unsubscribe();
+        setIsSubscribed(false);
+        setNotificationPermission(Notification.permission);
+      }
+    } catch (error) {
+      console.error('Push unsubscription failed:', error);
+    }
+  };
+
   useEffect(() => {
-    if (currentUser && typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'granted') {
+    if (currentUser && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush();
     }
   }, [currentUser]);
@@ -551,7 +575,8 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await unsubscribeFromPush();
     setCurrentUser(null);
     setLoginEmail('');
     setLoginPass('');
@@ -1733,7 +1758,7 @@ function App() {
             </div>
 
             {!isStandalone && (
-              <div className="mt-auto pt-6 border-t border-border">
+              <div className="mt-auto pt-6 border-t border-border space-y-3">
                 <button
                   onClick={() => setShowInstallPrompt(true)}
                   className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
@@ -1746,6 +1771,21 @@ function App() {
                     <div className="text-[10px] text-accent/60">Faster Access</div>
                   </div>
                 </button>
+
+                {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+                  <button
+                    onClick={subscribeToPush}
+                    className="w-full p-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 rounded-2xl flex items-center gap-3 transition-all group"
+                  >
+                    <div className="w-10 h-10 bg-rose-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-rose-200 group-hover:scale-110 transition-transform">
+                      <Bell size={20} />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-bold uppercase tracking-widest">Enable Alerts</div>
+                      <div className="text-[10px] text-rose-500/60">Get Notified</div>
+                    </div>
+                  </button>
+                )}
               </div>
             )}
           </div>
