@@ -1545,14 +1545,22 @@ function App() {
         </div>
         
         <div className="flex items-center gap-6">
-          {!isStandalone && (
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setShowInstallPrompt(true)}
               className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-full border border-accent/30 transition-all text-xs font-bold uppercase tracking-widest"
             >
               <Plus size={14} /> Install App
             </button>
-          )}
+            {notificationPermission !== 'unsupported' && (
+              <button 
+                onClick={subscribeToPush}
+                className={`hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border transition-all text-xs font-bold uppercase tracking-widest ${isSubscribed ? 'bg-green/20 border-green/30 text-green' : 'bg-rose-500/20 border-rose-500/30 text-rose-300 hover:bg-rose-500/40'}`}
+              >
+                <Bell size={14} /> {isSubscribed ? 'Alerts On' : 'Enable Alerts'}
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
@@ -1760,37 +1768,35 @@ function App() {
               )}
             </div>
 
-            {!isStandalone && (
-              <div className="mt-auto pt-6 border-t border-border space-y-3">
+            <div className="mt-auto pt-6 border-t border-border space-y-3">
+              <button
+                onClick={() => setShowInstallPrompt(true)}
+                className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
+              >
+                <div className="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+                  <Plus size={20} />
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold uppercase tracking-widest">Install App</div>
+                  <div className="text-[10px] text-accent/60">Faster Access</div>
+                </div>
+              </button>
+
+              {notificationPermission !== 'unsupported' && (
                 <button
-                  onClick={() => setShowInstallPrompt(true)}
-                  className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
+                  onClick={subscribeToPush}
+                  className={`w-full p-4 rounded-2xl flex items-center gap-3 transition-all group ${isSubscribed ? 'bg-green/10 text-green' : 'bg-rose-500/10 text-rose-600 hover:bg-rose-500/20'}`}
                 >
-                  <div className="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
-                    <Plus size={20} />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${isSubscribed ? 'bg-green text-white shadow-green/20' : 'bg-rose-600 text-white shadow-rose-200'}`}>
+                    <Bell size={20} />
                   </div>
                   <div className="text-left">
-                    <div className="text-xs font-bold uppercase tracking-widest">Install App</div>
-                    <div className="text-[10px] text-accent/60">Faster Access</div>
+                    <div className="text-xs font-bold uppercase tracking-widest">{isSubscribed ? 'Alerts On' : 'Enable Alerts'}</div>
+                    <div className={`text-[10px] ${isSubscribed ? 'text-green/60' : 'text-rose-500/60'}`}>{isSubscribed ? 'Subscribed' : 'Get Notified'}</div>
                   </div>
                 </button>
-
-                {!isSubscribed && notificationPermission !== 'unsupported' && (
-                  <button
-                    onClick={subscribeToPush}
-                    className="w-full p-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 rounded-2xl flex items-center gap-3 transition-all group"
-                  >
-                    <div className="w-10 h-10 bg-rose-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-rose-200 group-hover:scale-110 transition-transform">
-                      <Bell size={20} />
-                    </div>
-                    <div className="text-left">
-                      <div className="text-xs font-bold uppercase tracking-widest">Enable Alerts</div>
-                      <div className="text-[10px] text-rose-500/60">Get Notified</div>
-                    </div>
-                  </button>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </aside>
 
@@ -1901,6 +1907,10 @@ function App() {
                   onReportEmergency={reportEmergency}
                   emergencyTypes={emergencyTypes}
                   reportingEmergency={reportingEmergency}
+                  onInstall={() => setShowInstallPrompt(true)}
+                  onSubscribe={subscribeToPush}
+                  isSubscribed={isSubscribed}
+                  notificationPermission={notificationPermission}
                 />
               )}
               {currentPage === 'submit' && (
@@ -2248,7 +2258,11 @@ function PortalSettingsView({ settings, onUpdate }: any) {
   );
 }
 
-function Dashboard({ user, complaints, announcements, onNavigate, onSelectComplaint, departments, onReportEmergency, emergencyTypes, reportingEmergency }: any) {
+function Dashboard({ 
+  user, complaints, announcements, onNavigate, onSelectComplaint, 
+  departments, onReportEmergency, emergencyTypes, reportingEmergency,
+  onInstall, onSubscribe, isSubscribed, notificationPermission
+}: any) {
   const r = user.role;
   
   const isClosed = (c: any) => c.status === 'resolved' || c.status === 'closed-not-actionable';
@@ -2318,6 +2332,37 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
           <StatCard label="Closed" value={mine.filter(isClosed).length} color="green" sub="resolved or closed" />
         </div>
 
+        {/* Quick Setup Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={onInstall}
+            className="flex items-center gap-4 p-6 bg-accent/5 border border-accent/20 rounded-3xl hover:bg-accent/10 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+              <Plus size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-accent">Install App</h3>
+              <p className="text-xs text-accent/60">Add to home screen for faster access</p>
+            </div>
+          </button>
+
+          {notificationPermission !== 'unsupported' && (
+            <button
+              onClick={onSubscribe}
+              className={`flex items-center gap-4 p-6 border rounded-3xl transition-all text-left group ${isSubscribed ? 'bg-green/5 border-green/20 hover:bg-green/10' : 'bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10'}`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${isSubscribed ? 'bg-green text-white shadow-green/20' : 'bg-rose-600 text-white shadow-rose-200'}`}>
+                <Bell size={24} />
+              </div>
+              <div>
+                <h3 className={`font-bold ${isSubscribed ? 'text-green' : 'text-rose-600'}`}>{isSubscribed ? 'Alerts Enabled' : 'Enable Alerts'}</h3>
+                <p className={`text-xs ${isSubscribed ? 'text-green/60' : 'text-rose-500/60'}`}>{isSubscribed ? 'You are receiving notifications' : 'Get notified about updates'}</p>
+              </div>
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <h2 className="text-2xl font-serif">Recent Complaints</h2>
@@ -2369,6 +2414,37 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
           <StatCard label="In Progress" value={deptComplaints.filter((c: any) => c.status === 'in-progress').length} color="blue" sub="currently active" />
           <StatCard label="Closed" value={deptComplaints.filter(isClosed).length} color="green" sub="resolved or closed" />
           <StatCard label="Total" value={deptComplaints.length} color="red" sub="all time" />
+        </div>
+
+        {/* Quick Setup Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={onInstall}
+            className="flex items-center gap-4 p-6 bg-accent/5 border border-accent/20 rounded-3xl hover:bg-accent/10 transition-all text-left group"
+          >
+            <div className="w-12 h-12 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+              <Plus size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-accent">Install App</h3>
+              <p className="text-xs text-accent/60">Add to home screen for faster access</p>
+            </div>
+          </button>
+
+          {notificationPermission !== 'unsupported' && (
+            <button
+              onClick={onSubscribe}
+              className={`flex items-center gap-4 p-6 border rounded-3xl transition-all text-left group ${isSubscribed ? 'bg-green/5 border-green/20 hover:bg-green/10' : 'bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10'}`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${isSubscribed ? 'bg-green text-white shadow-green/20' : 'bg-rose-600 text-white shadow-rose-200'}`}>
+                <Bell size={24} />
+              </div>
+              <div>
+                <h3 className={`font-bold ${isSubscribed ? 'text-green' : 'text-rose-600'}`}>{isSubscribed ? 'Alerts Enabled' : 'Enable Alerts'}</h3>
+                <p className={`text-xs ${isSubscribed ? 'text-green/60' : 'text-rose-500/60'}`}>{isSubscribed ? 'You are receiving notifications' : 'Get notified about updates'}</p>
+              </div>
+            </button>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -2437,6 +2513,37 @@ function Dashboard({ user, complaints, announcements, onNavigate, onSelectCompla
         <StatCard label="Pending" value={complaints.filter((c: any) => c.status === 'pending').length} color="gold" />
         <StatCard label="In Progress" value={complaints.filter((c: any) => c.status === 'in-progress').length} color="blue" />
         <StatCard label="Closed" value={complaints.filter(isClosed).length} color="green" />
+      </div>
+
+      {/* Quick Setup Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button
+          onClick={onInstall}
+          className="flex items-center gap-4 p-6 bg-accent/5 border border-accent/20 rounded-3xl hover:bg-accent/10 transition-all text-left group"
+        >
+          <div className="w-12 h-12 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
+            <Plus size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-accent">Install App</h3>
+            <p className="text-xs text-accent/60">Add to home screen for faster access</p>
+          </div>
+        </button>
+
+        {notificationPermission !== 'unsupported' && (
+          <button
+            onClick={onSubscribe}
+            className={`flex items-center gap-4 p-6 border rounded-3xl transition-all text-left group ${isSubscribed ? 'bg-green/5 border-green/20 hover:bg-green/10' : 'bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10'}`}
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${isSubscribed ? 'bg-green text-white shadow-green/20' : 'bg-rose-600 text-white shadow-rose-200'}`}>
+              <Bell size={24} />
+            </div>
+            <div>
+              <h3 className={`font-bold ${isSubscribed ? 'text-green' : 'text-rose-600'}`}>{isSubscribed ? 'Alerts Enabled' : 'Enable Alerts'}</h3>
+              <p className={`text-xs ${isSubscribed ? 'text-green/60' : 'text-rose-500/60'}`}>{isSubscribed ? 'You are receiving notifications' : 'Get notified about updates'}</p>
+            </div>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
