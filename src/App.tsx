@@ -24,6 +24,7 @@ import {
   Facebook,
   Users2,
   Menu,
+  Bell,
   ArrowLeft,
   Lightbulb,
   BarChart3,
