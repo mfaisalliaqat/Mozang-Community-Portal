@@ -1536,16 +1536,11 @@ function App() {
           >
             {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
           </button>
-          <div className="flex items-center gap-3 text-xl font-serif text-white overflow-hidden">
-            <div className="w-8 h-8 bg-accent rounded-lg flex-shrink-0 flex items-center justify-center text-white font-bold text-[10px] shadow-lg shadow-accent/20">
+          <div className="flex items-center gap-3 text-xl font-serif text-white">
+            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-[10px] shadow-lg shadow-accent/20">
               MCP
             </div>
-            <span className="truncate">
-              <span className="hidden xs:inline">Mozang </span>
-              <span className="text-accent hidden sm:inline">Community Portal</span>
-              <span className="text-accent sm:hidden">Portal</span>
-              <span className="text-[8px] opacity-30 ml-2 hidden md:inline">v2.1</span>
-            </span>
+            <span>Mozang <span className="text-accent">Community Portal</span> <span className="text-[8px] opacity-30 ml-2">v2.1</span></span>
           </div>
         </div>
         
@@ -1603,7 +1598,7 @@ function App() {
               <div className="space-y-1">
                 <SidebarItem 
                   icon={<Home size={18} />} 
-                  label="Home" 
+                  label="Dashboard" 
                   active={currentPage === 'dashboard'} 
                   onClick={() => { setCurrentPage('dashboard'); setShowMobileMenu(false); }} 
                 />
@@ -1801,18 +1796,6 @@ function App() {
                   </div>
                 </button>
               )}
-
-              <div className="pt-4 mt-2 border-t border-border/50">
-                <div className="flex items-center gap-3 px-3">
-                  <div className="w-8 h-8 rounded-lg bg-ink/5 flex items-center justify-center text-ink/30 font-bold text-[8px]">
-                    MCP
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="text-[10px] font-bold text-ink truncate">Mozang Community Portal</div>
-                    <div className="text-[8px] text-muted truncate">Building a better Mozang together</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </aside>
@@ -1928,7 +1911,6 @@ function App() {
                   onSubscribe={subscribeToPush}
                   isSubscribed={isSubscribed}
                   notificationPermission={notificationPermission}
-                  settings={settings}
                 />
               )}
               {currentPage === 'submit' && (
@@ -2279,7 +2261,7 @@ function PortalSettingsView({ settings, onUpdate }: any) {
 function Dashboard({ 
   user, complaints, announcements, onNavigate, onSelectComplaint, 
   departments, onReportEmergency, emergencyTypes, reportingEmergency,
-  onInstall, onSubscribe, isSubscribed, notificationPermission, settings
+  onInstall, onSubscribe, isSubscribed, notificationPermission
 }: any) {
   const r = user.role;
   
@@ -2292,7 +2274,7 @@ function Dashboard({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-4xl font-serif leading-tight">Good morning, {user.name.split(' ')[0]} 👋</h1>
-            <p className="text-muted mt-1">Welcome back to the Mozang Community Portal.</p>
+            <p className="text-muted mt-1">Here's the status of your community complaints.</p>
           </div>
           <button 
             onClick={() => onNavigate('submit')}
@@ -2300,33 +2282,6 @@ function Dashboard({
           >
             <PlusCircle size={18} /> New Complaint
           </button>
-        </div>
-
-        {/* Prayer Section */}
-        <div className="bg-ink p-6 rounded-3xl text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-          <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed mb-1" dir="rtl">
-            اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-          </p>
-          <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed" dir="rtl">
-            اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-          </p>
-        </div>
-
-        {/* Community Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.issues_resolved || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Resolved</div>
-          </div>
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.departments_count || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Depts</div>
-          </div>
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.users_count || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Users</div>
-          </div>
         </div>
 
         {/* Emergency Section */}
@@ -2454,33 +2409,6 @@ function Dashboard({
           <p className="text-muted mt-1">Officer Panel — Welcome, {user.name}</p>
         </div>
 
-        {/* Prayer Section */}
-        <div className="bg-ink p-6 rounded-3xl text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-          <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed mb-1" dir="rtl">
-            اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-          </p>
-          <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed" dir="rtl">
-            اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-          </p>
-        </div>
-
-        {/* Community Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.issues_resolved || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Resolved</div>
-          </div>
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.departments_count || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Depts</div>
-          </div>
-          <div className="bg-white border border-border p-4 rounded-2xl text-center">
-            <div className="text-2xl font-serif text-ink">{settings?.users_count || '0'}</div>
-            <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Users</div>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Pending" value={deptComplaints.filter((c: any) => c.status === 'pending').length} color="gold" sub="needs attention" />
           <StatCard label="In Progress" value={deptComplaints.filter((c: any) => c.status === 'in-progress').length} color="blue" sub="currently active" />
@@ -2578,33 +2506,6 @@ function Dashboard({
       <div className="page-header">
         <h1 className="text-4xl font-serif">Admin Overview</h1>
         <p className="text-muted mt-1">System-wide complaint management and analytics.</p>
-      </div>
-
-      {/* Prayer Section */}
-      <div className="bg-ink p-6 rounded-3xl text-center relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-        <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed mb-1" dir="rtl">
-          اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-        </p>
-        <p className="font-amiri text-white/90 text-sm md:text-base leading-relaxed" dir="rtl">
-          اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-        </p>
-      </div>
-
-      {/* Community Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border border-border p-4 rounded-2xl text-center">
-          <div className="text-2xl font-serif text-ink">{settings?.issues_resolved || '0'}</div>
-          <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Resolved</div>
-        </div>
-        <div className="bg-white border border-border p-4 rounded-2xl text-center">
-          <div className="text-2xl font-serif text-ink">{settings?.departments_count || '0'}</div>
-          <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Depts</div>
-        </div>
-        <div className="bg-white border border-border p-4 rounded-2xl text-center">
-          <div className="text-2xl font-serif text-ink">{settings?.users_count || '0'}</div>
-          <div className="text-[8px] text-muted uppercase tracking-widest font-bold">Users</div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
