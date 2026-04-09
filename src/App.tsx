@@ -110,6 +110,130 @@ export default function AppWrapper() {
   );
 }
 
+function LandingPageView({ settings }: any) {
+  return (
+    <div className="min-h-full bg-ink p-8 md:p-16 flex flex-col justify-between relative overflow-hidden rounded-3xl">
+      {/* Decorative Elements */}
+      <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] rounded-full bg-radial from-accent/20 to-transparent blur-3xl"></div>
+      <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/15 to-transparent blur-3xl"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-radial from-white/5 to-transparent blur-3xl"></div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8 relative z-10 text-center md:text-left"
+      >
+        <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed mb-2" dir="rtl">
+          اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
+        </p>
+        <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed" dir="rtl">
+          اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
+        </p>
+      </motion.div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="flex items-center gap-3 text-2xl font-serif text-white relative z-10 mb-12"
+      >
+        <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30 text-white font-bold text-sm">
+          MCP
+        </div>
+        <span>Mozang <span className="text-accent">Community Portal</span></span>
+      </motion.div>
+      
+      <div className="relative z-10 max-w-lg">
+        <motion.h1 
+          initial={{ opacity: 0, x: -30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-5xl md:text-7xl text-white mb-6 font-serif leading-tight tracking-tight"
+        >
+          Your voice.<br />
+          <span className="text-accent">Your community.</span>
+        </motion.h1>
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="text-white/60 text-xl leading-relaxed font-light"
+        >
+          Building a better Mozang together. Submit complaints, track progress, and stay connected with the departments that serve you.
+        </motion.p>
+      </div>
+      
+      <div className="mt-12 space-y-12 relative z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-12">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.6 }}
+            className="bg-white/5 p-4 rounded-2xl border border-white/5 md:bg-transparent md:p-0 md:border-0"
+          >
+            <div className="text-3xl md:text-4xl font-serif text-white mb-1">{settings.issues_resolved || '0'}</div>
+            <div className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest font-bold">Issues Resolved</div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.7 }}
+            className="bg-white/5 p-4 rounded-2xl border border-white/5 md:bg-transparent md:p-0 md:border-0"
+          >
+            <div className="text-3xl md:text-4xl font-serif text-white mb-1">{settings.departments_count || '0'}</div>
+            <div className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest font-bold">Departments</div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.8 }}
+            className="bg-white/5 p-4 rounded-2xl border border-white/5 md:bg-transparent md:p-0 md:border-0"
+          >
+            <div className="text-3xl md:text-4xl font-serif text-white mb-1">{settings.users_count || '0'}</div>
+            <div className="text-[8px] md:text-[10px] text-white/40 uppercase tracking-widest font-bold">Users</div>
+          </motion.div>
+        </div>
+
+        {/* Footer Section */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          className="pt-8 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6"
+        >
+          <div className="space-y-1">
+            <div className="text-white font-serif text-lg">Muhammad Faisal</div>
+            <div className="text-accent text-xs font-bold uppercase tracking-widest">Founder</div>
+            <div className="text-white/50 text-sm flex items-center gap-2">
+              <MapPin size={14} /> Mozang The Heart of Lahore
+            </div>
+          </div>
+          <a 
+            href="https://facebook.com/Mozangpk" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group"
+          >
+            <Facebook size={18} className="text-white group-hover:text-accent transition-colors" />
+            <span className="text-white/80 text-sm font-medium">Facebook.com/Mozangpk</span>
+          </a>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.0 }}
+          className="mt-8 pt-6 border-t border-white/10"
+        >
+          <p className="text-white/60 text-sm leading-relaxed font-medium text-right md:text-left" dir="rtl">
+            یہ اقدام صرف بانی کی ذاتی کاوش ہے، جو میرے والدین کے لیے صدقہ جاریہ کے طور پر شروع کیا گیا ہے۔ اس کا کسی بھی سیاسی جماعت یا تنظیم سے کوئی تعلق نہیں ہے۔
+          </p>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('mozang_user');
@@ -571,7 +695,7 @@ function App() {
       setCurrentUser(u);
       localStorage.setItem('mozang_user', JSON.stringify(u));
       trackEvent('login');
-      setCurrentPage('dashboard');
+      setCurrentPage('home');
     } catch (e) {
       console.error('Login error:', e);
       setLoginError('An error occurred during login. Please try again.');
@@ -1284,168 +1408,31 @@ function App() {
     return (
       <div className="min-h-screen flex flex-col md:flex-row bg-paper">
         {/* Login Art */}
-        <div className="flex-1 bg-ink p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
-          {/* Decorative Elements */}
-          <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] rounded-full bg-radial from-accent/20 to-transparent blur-3xl"></div>
-          <div className="absolute bottom-[-80px] left-[-80px] w-[400px] h-[400px] rounded-full bg-radial from-accent2/15 to-transparent blur-3xl"></div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-radial from-white/5 to-transparent blur-3xl"></div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 relative z-10 text-center md:text-left"
-          >
-            <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed mb-2" dir="rtl">
-              اللَّهُمَّ صَلِّ عَلٰی مُحَمَّدٍ وَعَلٰی آلِ مُحَمَّدٍ كَمَا صَلَّيْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-            </p>
-            <p className="font-amiri text-white/90 text-base md:text-lg leading-relaxed" dir="rtl">
-              اللَّهُمَّ بَارِكْ عَلٰی مُحَمَّدٍ، وَعَلٰی آلِ مُحَمَّدٍ كَمَا بَارَكْتَ عَلٰی إِبْرَاهِيمَ وَعَلٰی آلِ إِبْرَاهِيمَ إِنَّكَ حَمِيدٌ مَجِيدٌ
-            </p>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex items-center gap-3 text-2xl font-serif text-white relative z-10 mb-12"
-          >
-            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/30 text-white font-bold text-sm">
-              MCP
-            </div>
-            <span>Mozang <span className="text-accent">Community Portal</span></span>
-          </motion.div>
-          
-          <div className="relative z-10 max-w-lg">
-            <motion.h1 
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-5xl md:text-7xl text-white mb-6 font-serif leading-tight tracking-tight"
-            >
-              Your voice.<br />
-              <span className="text-accent">Your community.</span>
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-white/60 text-xl leading-relaxed font-light"
-            >
-              Building a better Mozang together. Submit complaints, track progress, and stay connected with the departments that serve you.
-            </motion.p>
-          </div>
-          
-          <div className="space-y-12 relative z-10">
-            <div className="flex gap-12">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.6 }}
-              >
-                <div className="text-4xl font-serif text-white mb-1">{settings.issues_resolved || '0'}</div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Issues Resolved</div>
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.7 }}
-              >
-                <div className="text-4xl font-serif text-white mb-1">{settings.departments_count || '0'}</div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Departments</div>
-              </motion.div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.8 }}
-              >
-                <div className="text-4xl font-serif text-white mb-1">{settings.users_count || '0'}</div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Users</div>
-              </motion.div>
-            </div>
-
-            {/* Footer Section */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 }}
-              className="pt-8 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-6"
-            >
-              <div className="space-y-1">
-                <div className="text-white font-serif text-lg">Muhammad Faisal</div>
-                <div className="text-accent text-xs font-bold uppercase tracking-widest">Founder</div>
-                <div className="text-white/50 text-sm flex items-center gap-2">
-                  <MapPin size={14} /> Mozang The Heart of Lahore
-                </div>
-              </div>
-              <a 
-                href="https://facebook.com/Mozangpk" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group"
-              >
-                <Facebook size={18} className="text-white group-hover:text-accent transition-colors" />
-                <span className="text-white/80 text-sm font-medium">Facebook.com/Mozangpk</span>
-              </a>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.0 }}
-              className="mt-8 pt-6 border-t border-white/10"
-            >
-              <p className="text-white/60 text-sm leading-relaxed font-medium text-right md:text-left" dir="rtl">
-                یہ اقدام صرف بانی کی ذاتی کاوش ہے، جو میرے والدین کے لیے صدقہ جاریہ کے طور پر شروع کیا گیا ہے۔ اس کا کسی بھی سیاسی جماعت یا تنظیم سے کوئی تعلق نہیں ہے۔
-              </p>
-            </motion.div>
-
+        <div className="flex-1 bg-ink relative overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto p-8 md:p-16">
+            <LandingPageView settings={settings} />
+            
             {/* PWA Install Section for Landing Page */}
             {!isStandalone && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.2 }}
-                className="mt-12 p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm"
+                className="mt-12 bg-white/5 border border-white/10 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6"
               >
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                  <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-xl shadow-2xl shadow-accent/20">
-                    MCP
-                  </div>
-                  <div className="flex-1 text-center md:text-left">
-                    <h3 className="text-white font-serif text-xl mb-2">Get the Mozang CP App</h3>
-                    <p className="text-white/50 text-sm mb-4">Install our app on your phone or desktop for instant access, offline support, and a better experience.</p>
-                    
-                    {isIOS ? (
-                      <div className="inline-flex flex-col gap-2 text-left bg-white/5 p-4 rounded-2xl border border-white/5">
-                        <p className="text-[10px] font-bold text-accent uppercase tracking-widest mb-1">iOS Installation Guide:</p>
-                        <div className="flex items-center gap-3 text-xs text-white/80">
-                          <div className="w-6 h-6 bg-white/10 rounded flex items-center justify-center border border-white/10">
-                            <Share size={12} className="text-accent" />
-                          </div>
-                          <span>Tap the <strong>Share</strong> icon in Safari</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-white/80">
-                          <div className="w-6 h-6 bg-white/10 rounded flex items-center justify-center border border-white/10">
-                            <Plus size={12} className="text-white" />
-                          </div>
-                          <span>Select <strong>Add to Home Screen</strong></span>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={handleInstallClick}
-                        disabled={!deferredPrompt && !isIOS}
-                        className={`px-8 py-3 rounded-2xl font-bold uppercase tracking-widest transition-all shadow-xl ${
-                          (deferredPrompt || isIOS) 
-                            ? 'bg-accent text-white hover:bg-white hover:text-ink shadow-accent/20' 
-                            : 'bg-white/10 text-white/30 cursor-not-allowed'
-                        }`}
-                      >
-                        {deferredPrompt ? 'Install Now' : 'App Ready to Install'}
-                      </button>
-                    )}
-                  </div>
+                <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-xl shadow-accent/20 shrink-0">
+                  MCP
                 </div>
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className="text-white font-serif text-xl mb-1">Get the Mozang CP App</h3>
+                  <p className="text-white/40 text-sm">Install our app on your phone or desktop for instant access, offline support, and a better experience.</p>
+                </div>
+                <button 
+                  onClick={handleInstallClick}
+                  className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-bold uppercase tracking-widest transition-all whitespace-nowrap border border-white/10"
+                >
+                  {deferredPrompt ? 'Install Now' : 'App Ready to Install'}
+                </button>
               </motion.div>
             )}
           </div>
@@ -1536,11 +1523,14 @@ function App() {
           >
             {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
           </button>
-          <div className="flex items-center gap-3 text-xl font-serif text-white">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-[10px] shadow-lg shadow-accent/20">
+          <div className="flex items-center gap-2 md:gap-3 text-lg md:text-xl font-serif text-white overflow-hidden">
+            <div className="w-7 h-7 md:w-8 md:h-8 bg-accent rounded-lg flex items-center justify-center text-white font-bold text-[9px] md:text-[10px] shadow-lg shadow-accent/20 shrink-0">
               MCP
             </div>
-            <span>Mozang <span className="text-accent">Community Portal</span> <span className="text-[8px] opacity-30 ml-2">v2.1</span></span>
+            <span className="truncate">
+              Mozang <span className="text-accent"><span className="hidden sm:inline">Community </span>Portal</span>
+              <span className="hidden md:inline text-[8px] opacity-30 ml-2">v2.1</span>
+            </span>
           </div>
         </div>
         
@@ -1596,6 +1586,12 @@ function App() {
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-4 px-3">Main</div>
               <div className="space-y-1">
+                <SidebarItem 
+                  icon={<LayoutDashboard size={18} />} 
+                  label="Home" 
+                  active={currentPage === 'home'} 
+                  onClick={() => { setCurrentPage('home'); setShowMobileMenu(false); }} 
+                />
                 <SidebarItem 
                   icon={<Home size={18} />} 
                   label="Dashboard" 
@@ -1768,11 +1764,22 @@ function App() {
               )}
             </div>
 
-            <div className="mt-auto pt-6 border-t border-border space-y-3">
-              <button
-                onClick={() => setShowInstallPrompt(true)}
-                className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
-              >
+            <div className="mt-auto pt-6 border-t border-border space-y-6">
+              <div className="px-3">
+                <div className="flex items-center gap-2 text-muted mb-1">
+                  <div className="w-5 h-5 bg-accent/20 rounded-md flex items-center justify-center text-accent font-bold text-[8px]">MCP</div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Mozang CP</span>
+                </div>
+                <div className="text-[8px] text-muted/50 leading-tight">
+                  Building a better community together. v2.1
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => setShowInstallPrompt(true)}
+                  className="w-full p-4 bg-accent/10 hover:bg-accent/20 text-accent rounded-2xl flex items-center gap-3 transition-all group"
+                >
                 <div className="w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:scale-110 transition-transform">
                   <Plus size={20} />
                 </div>
@@ -1798,7 +1805,8 @@ function App() {
               )}
             </div>
           </div>
-        </aside>
+        </div>
+      </aside>
 
         {/* Mobile Overlay */}
         <AnimatePresence>
@@ -1896,6 +1904,9 @@ function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
+              {currentPage === 'home' && (
+                <LandingPageView settings={settings} />
+              )}
               {currentPage === 'dashboard' && (
                 <Dashboard 
                   user={currentUser} 
