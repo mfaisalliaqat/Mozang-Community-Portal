@@ -276,8 +276,19 @@ function App() {
   // --- PUSH NOTIFICATIONS ---
   const subscribeToPush = async () => {
     try {
-      if (!('serviceWorker' in navigator)) return;
+      if (!('serviceWorker' in navigator)) {
+        showToast('Notifications not supported in this browser');
+        return;
+      }
       
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      
+      if (permission !== 'granted') {
+        showToast('Notification permission denied');
+        return;
+      }
+
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -293,10 +304,11 @@ function App() {
         })
       });
       setIsSubscribed(true);
-      setNotificationPermission('granted');
+      showToast('Notifications enabled successfully!');
       console.log('Push subscription successful');
     } catch (error) {
       console.error('Push subscription failed:', error);
+      showToast('Failed to enable notifications');
     }
   };
 
@@ -475,26 +487,45 @@ function App() {
   const [lastAnnouncementId, setLastAnnouncementId] = useState<string | null>(() => localStorage.getItem('mozang_last_announcement'));
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'default') {
-      (window as any).Notification.requestPermission();
-    }
-  }, []);
+    const showNotification = async (title: string, options: any) => {
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification(title, options);
+        } catch (e) {
+          console.error('ServiceWorker notification failed:', e);
+          // Fallback
+          try {
+            new (window as any).Notification(title, options);
+          } catch (err) {
+            console.error('Notification fallback failed:', err);
+          }
+        }
+      } else {
+        try {
+          new (window as any).Notification(title, options);
+        } catch (e) {
+          console.error('Notification constructor failed:', e);
+        }
+      }
+    };
 
-  useEffect(() => {
     if (announcements.length > 0) {
       const latest = announcements[0];
       if (lastAnnouncementId && latest.id !== lastAnnouncementId) {
         if (typeof window !== 'undefined' && 'Notification' in window && (window as any).Notification.permission === 'granted') {
-          new (window as any).Notification('New Announcement: ' + latest.title, {
+          showNotification('New Announcement: ' + latest.title, {
             body: latest.text,
-            icon: '/favicon.ico'
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            tag: latest.id
           });
         }
       }
       setLastAnnouncementId(latest.id);
       localStorage.setItem('mozang_last_announcement', latest.id);
     }
-  }, [announcements]);
+  }, [announcements, lastAnnouncementId]);
 
   useEffect(() => {
     if (currentUser) {
