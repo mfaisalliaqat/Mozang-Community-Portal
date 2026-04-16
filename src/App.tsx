@@ -1593,6 +1593,29 @@ function App() {
             </div>
           </div>
         </div>
+
+        <AnimatePresence>
+          {showJoinModal && (
+            <JoinRequestModal 
+              onClose={() => setShowJoinModal(false)} 
+              onSubmit={submitJoinRequest} 
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div 
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 50 }}
+              className="fixed bottom-8 right-8 bg-ink text-white px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center gap-3"
+            >
+              <div className="w-6 h-6 rounded-full bg-green flex items-center justify-center text-[10px]">✓</div>
+              <span className="text-sm font-medium">{toast}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
