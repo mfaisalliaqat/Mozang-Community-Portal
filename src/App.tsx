@@ -432,8 +432,18 @@ function App() {
   };
 
   useEffect(() => {
+    const startTime = Date.now();
     trackEvent('page_view');
     
+    return () => {
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+      if (duration > 0) {
+        trackEvent('page_stay', { duration });
+      }
+    };
+  }, [currentPage]);
+
+  useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('utm_source') || urlParams.has('source')) {
       trackEvent('link_click');
@@ -4196,29 +4206,35 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
     ? [...stats.peak_times].sort((a: any, b: any) => b.count - a.count)[0]?.hour
     : 'N/A';
 
-  const conversionRate = stats.funnel.link_clicked > 0 
-    ? ((stats.funnel.registered / stats.funnel.link_clicked) * 100).toFixed(1)
-    : '0';
+  const avgAppTime = stats.avg_time_in_app ? Math.floor(stats.avg_time_in_app / 60) : 0;
+
+  const formatDuration = (sec: number) => {
+    if (!sec) return '0s';
+    if (sec < 60) return `${Math.floor(sec)}s`;
+    const mins = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${mins}m ${s}s`;
+  };
 
   return (
     <div className="space-y-8 pb-12">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-serif">Advanced Analytics</h1>
-        <div className="text-xs text-muted font-bold uppercase tracking-widest">Real-time Data Dashboard</div>
+        <div className="text-xs text-muted font-bold uppercase tracking-widest">User Retention & Engagement</div>
       </div>
 
       {/* Smart Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-ink text-white rounded-3xl p-6 shadow-xl shadow-ink/20">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
               <Zap size={20} className="text-yellow-400" />
             </div>
-            <h3 className="font-bold">Smart Insight</h3>
+            <h3 className="font-bold">Area Insight</h3>
           </div>
-          <p className="text-white/80 text-sm mb-2">Most problematic area detected:</p>
-          <div className="text-2xl font-serif text-accent">{mostProblematicArea}</div>
-          <p className="text-white/40 text-[10px] mt-4 uppercase tracking-widest">Based on complaint volume</p>
+          <p className="text-white/80 text-sm mb-2">Most active complaints:</p>
+          <div className="text-xl font-serif text-accent truncate">{mostProblematicArea}</div>
+          <p className="text-white/40 text-[10px] mt-4 uppercase tracking-widest">Based on reports</p>
         </div>
 
         <div className="bg-white border border-border rounded-3xl p-6 shadow-sm">
@@ -4226,13 +4242,11 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
             <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center">
               <Clock size={20} className="text-accent" />
             </div>
-            <h3 className="font-bold">Peak Usage</h3>
+            <h3 className="font-bold">Avg Session</h3>
           </div>
-          <p className="text-muted text-sm mb-2">Most active hour of the day:</p>
-          <div className="text-2xl font-serif text-ink">
-            {peakHour === 'N/A' ? 'N/A' : `${peakHour}:00 - ${parseInt(peakHour) + 1}:00`}
-          </div>
-          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Heatmap peak detected</p>
+          <p className="text-muted text-sm mb-2">Average time in app:</p>
+          <div className="text-2xl font-serif text-ink">{avgAppTime} mins</div>
+          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Session duration</p>
         </div>
 
         <div className="bg-white border border-border rounded-3xl p-6 shadow-sm">
@@ -4240,11 +4254,149 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
             <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
               <TrendingUp size={20} className="text-green-600" />
             </div>
-            <h3 className="font-bold">Conversion</h3>
+            <h3 className="font-bold">Day 1 Retention</h3>
           </div>
-          <p className="text-muted text-sm mb-2">Link to Registration rate:</p>
-          <div className="text-2xl font-serif text-ink">{conversionRate}%</div>
-          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Marketing efficiency</p>
+          <p className="text-muted text-sm mb-2">Returning users (24h):</p>
+          <div className="text-2xl font-serif text-ink">
+            {stats.retention.find((r: any) => r.day === 1)?.percentage.toFixed(1)}%
+          </div>
+          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Stickiness metric</p>
+        </div>
+
+        <div className="bg-white border border-border rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Users2 size={20} className="text-blue-600" />
+            </div>
+            <h3 className="font-bold">Active Users</h3>
+          </div>
+          <p className="text-muted text-sm mb-2">Total Unique Visitors:</p>
+          <div className="text-2xl font-serif text-ink">{stats.unique_visitors}</div>
+          <p className="text-muted text-[10px] mt-4 uppercase tracking-widest">Total reach</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Retention Cohorts */}
+        <div className="lg:col-span-2 bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <h3 className="text-xl font-serif mb-6">User Retention Cohorts</h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.retention}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="day" label={{ value: 'Days Since First Visit', position: 'insideBottom', offset: -5 }} />
+                <YAxis unit="%" />
+                <Tooltip />
+                <Area type="monotone" dataKey="percentage" name="Retention %" stroke="#2A9D8F" fill="#2A9D8F" fillOpacity={0.1} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-8 overflow-x-auto">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="py-3 px-4 text-[10px] font-bold text-muted uppercase tracking-widest text-center">Cohort Day</th>
+                  {stats.retention.map((r: any) => (
+                    <th key={r.day} className="py-3 px-4 text-[10px] font-bold text-muted uppercase tracking-widest text-center">Day {r.day}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="hover:bg-cream/50">
+                  <td className="py-4 px-4 font-bold text-center">All Users</td>
+                  {stats.retention.map((r: any) => (
+                    <td key={r.day} className="py-4 px-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="font-bold text-ink">{r.percentage.toFixed(1)}%</span>
+                        <div className="w-12 h-1 bg-border rounded-full mt-1 overflow-hidden">
+                          <div className="h-full bg-accent" style={{ width: `${r.percentage}%` }}></div>
+                        </div>
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Top Engaging Users */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <h3 className="text-xl font-serif mb-6">Most Active Users</h3>
+          <div className="space-y-4">
+            {stats.top_users.map((u: any, i: number) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-cream/30 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-ink text-white flex items-center justify-center font-bold text-xs">
+                    {u.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold truncate max-w-[120px]">{u.name}</div>
+                    <div className="text-[10px] text-muted uppercase font-bold tracking-widest">{u.role}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-ink">{u.event_count} actions</div>
+                  <div className="text-[10px] text-muted">{u.session_count} sess.</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Drop-offs */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-serif">Major Drop-off Points</h3>
+            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center">
+              <LogOut size={16} />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {stats.drop_offs.map((d: any, i: number) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-background border border-border rounded-2xl">
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl font-serif text-muted/30">#0{i+1}</span>
+                  <div>
+                    <div className="text-sm font-bold capitalize">{d.path.replace('/', '').replace('-', ' ') || 'Landing Page'}</div>
+                    <div className="text-xs text-muted">Last screen for {d.count} users</div>
+                  </div>
+                </div>
+                <div className="text-rose-500 font-bold text-xs">{((d.count / stats.unique_visitors) * 100).toFixed(1)}% exit</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 p-4 bg-rose-50 rounded-2xl border border-rose-100 italic text-xs text-rose-600">
+            Suggestion: Consider adding calls-to-action or smoother navigation on these screens to reduce drop-off rate.
+          </div>
+        </div>
+
+        {/* Time per Screen */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-serif">Avg Time per Screen</h3>
+            <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+              <Clock size={16} />
+            </div>
+          </div>
+          <div className="space-y-4">
+            {stats.time_per_screen.slice(0, 6).map((s: any, i: number) => (
+              <div key={i} className="space-y-2">
+                <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-muted">
+                  <span>{s.path.replace('/', '').replace('-', ' ') || 'Landing Page'}</span>
+                  <span>{formatDuration(s.avg_duration)}</span>
+                </div>
+                <div className="h-2 bg-background rounded-full overflow-hidden border border-border">
+                  <div 
+                    className="h-full bg-accent rounded-full transition-all duration-1000" 
+                    style={{ width: `${Math.min(100, (s.avg_duration / stats.time_per_screen[0].avg_duration) * 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

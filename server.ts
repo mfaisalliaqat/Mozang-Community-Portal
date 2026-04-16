@@ -868,6 +868,67 @@ async function startServer() {
         ORDER BY hour ASC
       `).all();
 
+      // --- ADVANCED ANALYTICS ---
+
+      // Retention Analysis (Simple Cohort)
+      // Users who were active on day X and also active on day X+1, X+7, X+30
+      const days = [1, 7, 30];
+      stats.retention = days.map(d => {
+        const query = `
+          SELECT count(DISTINCT t2.userId) as retained
+          FROM analytics_events t1
+          JOIN analytics_events t2 ON t1.userId = t2.userId
+          WHERE t1.userId IS NOT NULL
+          AND date(t2.timestamp) = date(t1.timestamp, '+${d} days')
+        `;
+        const totalUsersQuery = "SELECT count(DISTINCT userId) as count FROM analytics_events WHERE userId IS NOT NULL";
+        const total = db.prepare(totalUsersQuery).get().count;
+        const retained = db.prepare(query).get().retained;
+        return { day: d, percentage: total > 0 ? (retained / total) * 100 : 0 };
+      });
+
+      // User Engagement (Top Users)
+      stats.top_users = db.prepare(`
+        SELECT u.name, u.role, count(*) as event_count, count(DISTINCT sessionId) as session_count
+        FROM analytics_events a
+        JOIN users u ON a.userId = u.id
+        GROUP BY a.userId
+        ORDER BY event_count DESC
+        LIMIT 10
+      `).all();
+
+      // Session Duration & Time per Screen
+      stats.avg_time_in_app = db.prepare(`
+        SELECT avg(duration_seconds) as avg_duration
+        FROM (
+          SELECT sessionId, (julianday(max(timestamp)) - julianday(min(timestamp))) * 86400 as duration_seconds
+          FROM analytics_events
+          GROUP BY sessionId
+          HAVING duration_seconds > 0
+        )
+      `).get().avg_duration || 0;
+
+      stats.time_per_screen = db.prepare(`
+        SELECT path, avg(duration) as avg_duration
+        FROM analytics_events
+        WHERE duration IS NOT NULL AND duration > 0
+        GROUP BY path
+        ORDER BY avg_duration DESC
+      `).all();
+
+      // Drop-off Analysis (Last screen in session)
+      stats.drop_offs = db.prepare(`
+        SELECT path, count(*) as count
+        FROM (
+          SELECT path, ROW_NUMBER() OVER(PARTITION BY sessionId ORDER BY timestamp DESC) as rn
+          FROM analytics_events
+        )
+        WHERE rn = 1
+        GROUP BY path
+        ORDER BY count DESC
+        LIMIT 5
+      `).all();
+
       console.log(`Analytics stats fetched in ${Date.now() - start}ms`);
       res.json(stats);
     } catch (error: any) {
