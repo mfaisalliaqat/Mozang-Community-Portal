@@ -38,6 +38,7 @@ import {
   RefreshCw,
   Share,
   Plus,
+  UserPlus,
   Zap,
   Flame,
   Droplets,
@@ -747,6 +748,21 @@ function App() {
       const res = await fetch(`/api/join-requests/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete request');
       showToast('Request deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const updateJoinRequestStatus = async (id: string, status: 'pending' | 'processed') => {
+    try {
+      const res = await fetch(`/api/join-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update request status');
+      showToast(status === 'processed' ? 'Marked as account created' : 'Marked as pending');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -1784,7 +1800,7 @@ function App() {
                       label="Suggestions" 
                       active={currentPage === 'manage-suggestions'} 
                       onClick={() => { setCurrentPage('manage-suggestions'); setShowMobileMenu(false); }} 
-                      count={suggestions.length}
+                      count={suggestions.filter(s => s.status === 'pending').length}
                     />
                     <SidebarItem 
                       icon={<ClipboardList size={18} />} 
@@ -1804,7 +1820,7 @@ function App() {
                       label="Join Requests" 
                       active={currentPage === 'join-requests'} 
                       onClick={() => { setCurrentPage('join-requests'); setShowMobileMenu(false); }} 
-                      count={joinRequests.length}
+                      count={joinRequests.filter(r => r.status === 'pending').length}
                     />
                     <SidebarItem 
                       icon={<Building2 size={18} />} 
@@ -2260,6 +2276,7 @@ function App() {
                 <JoinRequestsView 
                   requests={joinRequests}
                   onDelete={deleteJoinRequest}
+                  onUpdateStatus={updateJoinRequestStatus}
                 />
               )}
             </motion.div>
@@ -5759,7 +5776,7 @@ function JoinRequestModal({ onClose, onSubmit }: { onClose: () => void, onSubmit
   );
 }
 
-function JoinRequestsView({ requests, onDelete }: { requests: JoinRequest[], onDelete: (id: string) => void }) {
+function JoinRequestsView({ requests, onDelete, onUpdateStatus }: { requests: JoinRequest[], onDelete: (id: string) => void, onUpdateStatus: (id: string, status: 'pending' | 'processed') => void }) {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="page-header">
@@ -5775,6 +5792,7 @@ function JoinRequestsView({ requests, onDelete }: { requests: JoinRequest[], onD
                 <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Name</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Contact</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Address</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Date</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -5782,7 +5800,7 @@ function JoinRequestsView({ requests, onDelete }: { requests: JoinRequest[], onD
             <tbody className="divide-y divide-border">
               {requests.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-muted italic">No join requests found.</td>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted italic">No join requests found.</td>
                 </tr>
               ) : (
                 requests.map((req) => (
@@ -5792,14 +5810,31 @@ function JoinRequestsView({ requests, onDelete }: { requests: JoinRequest[], onD
                     </td>
                     <td className="px-6 py-4 text-sm text-muted">{req.contact}</td>
                     <td className="px-6 py-4 text-sm text-muted max-w-xs truncate">{req.address}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${req.status === 'processed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                        {req.status || 'pending'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-xs text-muted">{new Date(req.timestamp).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => onDelete(req.id)}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {req.status !== 'processed' && (
+                          <button 
+                            onClick={() => onUpdateStatus(req.id, 'processed')}
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all flex items-center gap-2"
+                            title="Mark as Account Created"
+                          >
+                            <UserPlus size={14} /> Mark Created
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => onDelete(req.id)}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Delete Request"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

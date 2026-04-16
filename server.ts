@@ -510,10 +510,22 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.patch("/api/suggestions/:id", (req, res) => {
+  app.patch("/api/suggestions/:id", async (req, res) => {
     const { status } = req.body;
     try {
       db.prepare("UPDATE suggestions SET status = ? WHERE id = ?").run(status, req.params.id);
+      
+      if (status === 'acknowledged') {
+        const suggestion = db.prepare("SELECT * FROM suggestions WHERE id = ?").get(req.params.id);
+        if (suggestion) {
+          await sendPushNotification(suggestion.userId, {
+            title: "Suggestion Acknowledged",
+            body: "Your suggestion has been acknowledged by the admin. Thank you for your feedback!",
+            data: { type: 'suggestion', id: req.params.id }
+          });
+        }
+      }
+      
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error updating suggestion:', error);
@@ -1229,6 +1241,16 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/join-requests/:id", (req, res) => {
+    const { status } = req.body;
+    try {
+      db.prepare("UPDATE join_requests SET status = ? WHERE id = ?").run(status, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   });
 
