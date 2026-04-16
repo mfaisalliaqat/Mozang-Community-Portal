@@ -769,6 +769,18 @@ function App() {
     }
   };
 
+  const processJoinRequest = (req: JoinRequest) => {
+    setUserName(req.name);
+    setUserContact(req.contact);
+    setUserAddress(req.address);
+    setUserEmail('');
+    setUserPass('123456');
+    setUserRole('resident');
+    setEditingUserId(null);
+    setCurrentPage('manage-users');
+    showToast(`Pre-filled data for ${req.name}. Please enter email.`);
+  };
+
   const handleLogin = async () => {
     setLoginError(null);
     const email = loginEmail.trim().toLowerCase();
@@ -2277,6 +2289,7 @@ function App() {
                   requests={joinRequests}
                   onDelete={deleteJoinRequest}
                   onUpdateStatus={updateJoinRequestStatus}
+                  onProcess={processJoinRequest}
                 />
               )}
             </motion.div>
@@ -5776,7 +5789,17 @@ function JoinRequestModal({ onClose, onSubmit }: { onClose: () => void, onSubmit
   );
 }
 
-function JoinRequestsView({ requests, onDelete, onUpdateStatus }: { requests: JoinRequest[], onDelete: (id: string) => void, onUpdateStatus: (id: string, status: 'pending' | 'processed') => void }) {
+function JoinRequestsView({ 
+  requests, 
+  onDelete, 
+  onUpdateStatus,
+  onProcess 
+}: { 
+  requests: JoinRequest[], 
+  onDelete: (id: string) => void, 
+  onUpdateStatus: (id: string, status: 'pending' | 'processed') => void,
+  onProcess: (req: JoinRequest) => void
+}) {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="page-header">
@@ -5809,7 +5832,9 @@ function JoinRequestsView({ requests, onDelete, onUpdateStatus }: { requests: Jo
                       <div className="font-bold text-ink">{req.name}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-muted">{req.contact}</td>
-                    <td className="px-6 py-4 text-sm text-muted max-w-xs truncate">{req.address}</td>
+                    <td className="px-6 py-4 text-sm text-muted whitespace-normal break-words underline-offset-4 decoration-border/30 max-w-[200px]">
+                      {req.address}
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${req.status === 'processed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
                         {req.status || 'pending'}
@@ -5819,13 +5844,22 @@ function JoinRequestsView({ requests, onDelete, onUpdateStatus }: { requests: Jo
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {req.status !== 'processed' && (
-                          <button 
-                            onClick={() => onUpdateStatus(req.id, 'processed')}
-                            className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all flex items-center gap-2"
-                            title="Mark as Account Created"
-                          >
-                            <UserPlus size={14} /> Mark Created
-                          </button>
+                          <>
+                            <button 
+                              onClick={() => onProcess(req)}
+                              className="px-3 py-1.5 bg-ink text-white rounded-lg text-xs font-bold hover:bg-accent transition-all flex items-center gap-2"
+                              title="Process & Add User"
+                            >
+                              <UserPlus size={14} /> Add User
+                            </button>
+                            <button 
+                              onClick={() => onUpdateStatus(req.id, 'processed')}
+                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all flex items-center gap-2"
+                              title="Mark as Account Created"
+                            >
+                              <CheckCircle2 size={14} /> Mark Created
+                            </button>
+                          </>
                         )}
                         <button 
                           onClick={() => onDelete(req.id)}
