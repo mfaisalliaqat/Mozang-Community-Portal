@@ -179,6 +179,15 @@ try {
       name TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS join_requests (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      contact TEXT NOT NULL,
+      address TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      timestamp TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_complaints_residentId ON complaints(residentId);
     CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
     CREATE INDEX IF NOT EXISTS idx_sub_categories_deptId ON sub_categories(deptId);
@@ -916,7 +925,8 @@ async function startServer() {
       const tables = [
         'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
         'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
-        'emergency_types', 'analytics_events', 'notifications', 'blood_requests'
+        'emergency_types', 'analytics_events', 'notifications', 'blood_requests',
+        'join_requests'
       ];
       const backup: any = {};
       for (const table of tables) {
@@ -943,7 +953,8 @@ async function startServer() {
       const tables = [
         'users', 'departments', 'sub_categories', 'complaints', 'suggestions', 
         'timeline', 'announcements', 'settings', 'areas', 'emergencies', 
-        'emergency_types', 'analytics_events', 'notifications', 'blood_requests'
+        'emergency_types', 'analytics_events', 'notifications', 'blood_requests',
+        'join_requests'
       ];
       
       const restore = db.transaction(() => {
@@ -1188,6 +1199,36 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error updating setting:', error);
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Join Requests
+  app.get("/api/join-requests", (req, res) => {
+    try {
+      const list = db.prepare("SELECT * FROM join_requests ORDER BY timestamp DESC").all();
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/join-requests", (req, res) => {
+    const { id, name, contact, address, timestamp } = req.body;
+    try {
+      db.prepare("INSERT INTO join_requests (id, name, contact, address, timestamp) VALUES (?, ?, ?, ?, ?)")
+        .run(id, name, contact, address, timestamp || new Date().toISOString());
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/join-requests/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM join_requests WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

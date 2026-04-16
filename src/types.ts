@@ -120,3 +120,12 @@ export interface BloodRequest {
   status: 'active' | 'closed' | 'expired';
   timestamp: string;
 }
+
+export interface JoinRequest {
+  id: string;
+  name: string;
+  contact: string;
+  address: string;
+  status: 'pending' | 'processed';
+  timestamp: string;
+}

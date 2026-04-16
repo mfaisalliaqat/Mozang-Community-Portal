@@ -56,7 +56,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory, BloodRequest } from './types';
+import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory, BloodRequest, JoinRequest } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
 
 // --- ERROR HANDLING ---
@@ -110,7 +110,7 @@ export default function AppWrapper() {
   );
 }
 
-function LandingPageView({ settings }: any) {
+function LandingPageView({ settings, onJoinClick }: any) {
   return (
     <div className="min-h-full bg-ink p-8 md:p-16 flex flex-col justify-between relative overflow-hidden rounded-3xl">
       {/* Decorative Elements */}
@@ -157,10 +157,20 @@ function LandingPageView({ settings }: any) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="text-white/60 text-xl leading-relaxed font-light"
+          className="text-white/60 text-xl leading-relaxed font-light mb-8"
         >
           Building a better Mozang together. Submit complaints, track progress, and stay connected with the departments that serve you.
         </motion.p>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onJoinClick}
+          className="px-8 py-4 bg-accent text-white rounded-2xl font-bold shadow-xl shadow-accent/20 hover:bg-accent/90 transition-all flex items-center gap-3"
+        >
+          <PlusCircle size={20} />
+          Show Interest to Join
+        </motion.button>
       </div>
       
       <div className="mt-12 space-y-12 relative z-10">
@@ -261,6 +271,8 @@ function App() {
   const [emergencyTypes, setEmergencyTypes] = useState<any[]>([]);
   const [bloodRequests, setBloodRequests] = useState<BloodRequest[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
@@ -604,6 +616,7 @@ function App() {
 
       if (currentUser?.role === 'admin') {
         endpoints.push({ name: 'analytics', url: '/api/analytics/stats' });
+        endpoints.push({ name: 'joinRequests', url: '/api/join-requests' });
       }
 
       console.log(`Starting Promise.all for ${endpoints.length} endpoints...`);
@@ -651,6 +664,7 @@ function App() {
       setEmergencyTypes(dataMap.emergencyTypes || []);
       setBloodRequests(dataMap.bloodRequests || []);
       setNotifications(dataMap.notifications || []);
+      setJoinRequests(dataMap.joinRequests || []);
       
       if (dataMap.analytics) {
         setAnalyticsStats(dataMap.analytics);
@@ -697,6 +711,46 @@ function App() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const toTitleCase = (str: string) => {
+    return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const submitJoinRequest = async (data: { name: string, contact: string, address: string }) => {
+    const id = "JR-" + Date.now();
+    const newRequest = {
+      id,
+      name: toTitleCase(data.name),
+      contact: data.contact,
+      address: toTitleCase(data.address),
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      const res = await fetch('/api/join-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRequest)
+      });
+      if (!res.ok) throw new Error('Failed to submit request');
+      showToast('Your interest has been submitted successfully!');
+      setShowJoinModal(false);
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
+  const deleteJoinRequest = async (id: string) => {
+    try {
+      const res = await fetch(`/api/join-requests/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete request');
+      showToast('Request deleted');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
   };
 
   const handleLogin = async () => {
@@ -1441,7 +1495,7 @@ function App() {
         {/* Login Art */}
         <div className="flex-1 bg-ink relative overflow-hidden flex flex-col">
           <div className="flex-1 overflow-y-auto p-8 md:p-16">
-            <LandingPageView settings={settings} />
+            <LandingPageView settings={settings} onJoinClick={() => setShowJoinModal(true)} />
             
             {/* PWA Install Section for Landing Page */}
             {!isStandalone && (
@@ -1723,6 +1777,13 @@ function App() {
                       onClick={() => { setCurrentPage('manage-users'); setShowMobileMenu(false); }} 
                     />
                     <SidebarItem 
+                      icon={<Users2 size={18} />} 
+                      label="Join Requests" 
+                      active={currentPage === 'join-requests'} 
+                      onClick={() => { setCurrentPage('join-requests'); setShowMobileMenu(false); }} 
+                      count={joinRequests.length}
+                    />
+                    <SidebarItem 
                       icon={<Building2 size={18} />} 
                       label="Manage Departments" 
                       active={currentPage === 'manage-departments'} 
@@ -1936,7 +1997,7 @@ function App() {
               transition={{ duration: 0.2 }}
             >
               {currentPage === 'home' && (
-                <LandingPageView settings={settings} />
+                <LandingPageView settings={settings} onJoinClick={() => setShowJoinModal(true)} />
               )}
               {currentPage === 'dashboard' && (
                 <Dashboard 
@@ -2172,6 +2233,12 @@ function App() {
                   error={analyticsError}
                 />
               )}
+              {currentPage === 'join-requests' && currentUser.role === 'admin' && (
+                <JoinRequestsView 
+                  requests={joinRequests}
+                  onDelete={deleteJoinRequest}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -2188,6 +2255,12 @@ function App() {
             onMarkAsRead={markAsRead}
             user={currentUser}
             departments={departments}
+          />
+        )}
+        {showJoinModal && (
+          <JoinRequestModal 
+            onClose={() => setShowJoinModal(false)} 
+            onSubmit={submitJoinRequest} 
           />
         )}
       </AnimatePresence>
@@ -5579,6 +5652,137 @@ function SystemManagementView({ complaints, onBackup, onRestore }: any) {
               <Download size={20} /> Export Complaints
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function JoinRequestModal({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
+  const [name, setName] = useState('');
+  const [contact, setContact] = useState('');
+  const [address, setAddress] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !contact || !address) return;
+    onSubmit({ name, contact, address });
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-ink/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl relative"
+      >
+        <button onClick={onClose} className="absolute top-6 right-6 text-muted hover:text-ink transition-colors">
+          <X size={24} />
+        </button>
+        
+        <div className="mb-8">
+          <h2 className="text-3xl font-serif mb-2 text-ink">Join Request</h2>
+          <p className="text-muted text-sm">Submit your details to show interest in joining the community portal.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-muted uppercase tracking-widest">Full Name</label>
+            <input 
+              required
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your complete name"
+              className="w-full px-4 py-3 bg-cream border border-border rounded-xl outline-none focus:border-accent transition-all"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number</label>
+            <input 
+              required
+              type="tel" 
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              placeholder="Enter your phone number"
+              className="w-full px-4 py-3 bg-cream border border-border rounded-xl outline-none focus:border-accent transition-all"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-muted uppercase tracking-widest">Complete Address</label>
+            <textarea 
+              required
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter your complete address"
+              rows={3}
+              className="w-full px-4 py-3 bg-cream border border-border rounded-xl outline-none focus:border-accent transition-all resize-none"
+            />
+          </div>
+          <button 
+            type="submit"
+            className="w-full py-4 bg-ink text-white rounded-xl font-bold hover:bg-accent transition-all shadow-lg shadow-ink/10"
+          >
+            Submit Request
+          </button>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function JoinRequestsView({ requests, onDelete }: { requests: JoinRequest[], onDelete: (id: string) => void }) {
+  return (
+    <div className="max-w-5xl mx-auto space-y-8">
+      <div className="page-header">
+        <h1 className="text-4xl font-serif">Join Requests</h1>
+        <p className="text-muted mt-1">Manage users who have shown interest in joining the portal.</p>
+      </div>
+
+      <div className="bg-white border border-border rounded-3xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-cream border-b border-border">
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Name</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Contact</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Address</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Date</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {requests.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-muted italic">No join requests found.</td>
+                </tr>
+              ) : (
+                requests.map((req) => (
+                  <tr key={req.id} className="hover:bg-cream/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-ink">{req.name}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted">{req.contact}</td>
+                    <td className="px-6 py-4 text-sm text-muted max-w-xs truncate">{req.address}</td>
+                    <td className="px-6 py-4 text-xs text-muted">{new Date(req.timestamp).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => onDelete(req.id)}
+                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
