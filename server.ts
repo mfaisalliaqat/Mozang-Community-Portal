@@ -478,6 +478,17 @@ async function startServer() {
     }
   });
 
+  app.patch("/api/emergency-types/:id", (req, res) => {
+    const { name, deptId } = req.body;
+    try {
+      db.prepare("UPDATE emergency_types SET name = ?, deptId = ? WHERE id = ?").run(name, deptId, req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error updating emergency type:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Timeline Read Status
   app.patch("/api/timeline/read", (req, res) => {
     const { complaintId, userId } = req.body;

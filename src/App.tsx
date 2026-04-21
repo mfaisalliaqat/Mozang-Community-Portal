@@ -37,6 +37,7 @@ import {
   Database,
   RefreshCw,
   Share,
+  Copy,
   Plus,
   UserPlus,
   Zap,
@@ -59,6 +60,16 @@ import {
 } from 'recharts';
 import { User, Role, Complaint, Announcement, Status, Priority, Department, Category, SubCategory, BloodRequest, JoinRequest } from './types';
 import { STATUS_COLORS, PRIORITY_COLORS } from './constants';
+
+const formatPhone = (val: string) => {
+  let digits = val.replace(/\D/g, '');
+  if (digits.length < 2) return '03';
+  if (!digits.startsWith('03')) {
+    if (digits.startsWith('3')) digits = '0' + digits;
+    else digits = '03' + digits;
+  }
+  return digits.slice(0, 11);
+};
 
 // --- ERROR HANDLING ---
 function handleApiError(error: unknown) {
@@ -468,7 +479,7 @@ function App() {
   const [newCategory, setNewCategory] = useState('water');
   const [newSubCategory, setNewSubCategory] = useState('');
   const [newAddress, setNewAddress] = useState('');
-  const [newContact, setNewContact] = useState('');
+  const [newContact, setNewContact] = useState('03');
   const [newArea, setNewArea] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newBillRef, setNewBillRef] = useState('');
@@ -480,7 +491,7 @@ function App() {
   const [userPass, setUserPass] = useState('');
   const [userRole, setUserRole] = useState<Role>('resident');
   const [userDept, setUserDept] = useState('');
-  const [userContact, setUserContact] = useState('');
+  const [userContact, setUserContact] = useState('03');
   const [userArea, setUserArea] = useState('');
   const [userAddress, setUserAddress] = useState('');
   const [userAvatar, setUserAvatar] = useState('');
@@ -1458,6 +1469,21 @@ function App() {
     }
   };
 
+  const updateEmergencyType = async (id: string, name: string, deptId: string) => {
+    try {
+      const res = await fetch(`/api/emergency-types/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, deptId })
+      });
+      if (!res.ok) throw new Error('Failed to update emergency type');
+      showToast('Emergency type updated');
+      fetchData();
+    } catch (e) {
+      handleApiError(e);
+    }
+  };
+
   const deleteEmergency = async (id: string) => {
     try {
       const res = await fetch(`/api/emergencies/${id}`, { method: 'DELETE' });
@@ -2282,6 +2308,7 @@ function App() {
                   onReportEmergency={reportEmergency}
                   emergencyTypes={emergencyTypes}
                   onAddType={addEmergencyType}
+                  onUpdateType={updateEmergencyType}
                   onDeleteType={deleteEmergencyType}
                   departments={departments}
                 />
@@ -2839,6 +2866,18 @@ function ComplaintCard({ complaint, onClick, departments, viewMode = 'card', idx
           <span className="font-mono text-[10px] text-muted bg-cream px-2 py-0.5 rounded w-fit">{complaint.id}</span>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              const text = `Complaint ID: ${complaint.id}\nDescription: ${complaint.description}\nAddress: ${complaint.address}\nContact: ${complaint.contact}\nStatus: ${complaint.status}`;
+              navigator.clipboard.writeText(text);
+              alert('Complaint details copied to clipboard');
+            }}
+            className="p-1.5 text-muted hover:text-accent hover:bg-cream rounded-lg transition-all"
+            title="Copy Complaint Details"
+          >
+            <Copy size={14} />
+          </button>
           <span className={`text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${STATUS_COLORS[complaint.status]}`}>
             {complaint.status.replace('-', ' ')}
           </span>
@@ -2986,14 +3025,14 @@ function SubmitForm({
           </div>
 
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Contact Number *</label>
+            <label className="text-xs font-semibold tracking-wide">Contact Number * (Format: 03xxxxxxxxx)</label>
             <input 
               type="text" 
               value={newContact}
-              onChange={(e) => setNewContact(e.target.value)}
-              maxLength={20}
+              onChange={(e) => setNewContact(formatPhone(e.target.value))}
+              maxLength={11}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-              placeholder="Enter your contact number"
+              placeholder="03xxxxxxxxx"
             />
           </div>
 
@@ -3309,14 +3348,14 @@ function AdminUsersView({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Contact Number</label>
+            <label className="text-xs font-semibold tracking-wide">Contact Number (Format: 03xxxxxxxxx)</label>
             <input 
               type="text" 
               value={userContact}
-              onChange={(e) => setUserContact(e.target.value)}
-              maxLength={20}
+              onChange={(e) => setUserContact(formatPhone(e.target.value))}
+              maxLength={11}
               className="w-full px-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-              placeholder="0300-1234567"
+              placeholder="03xxxxxxxxx"
             />
           </div>
           <div className="space-y-1.5">
@@ -3906,7 +3945,7 @@ function BloodDonation({
   const [showForm, setShowForm] = useState(false);
   const [bloodGroup, setBloodGroup] = useState('');
   const [name, setName] = useState(user?.name || '');
-  const [contact, setContact] = useState(user?.contact || '');
+  const [contact, setContact] = useState(user?.contact || '03');
   const [hospital, setHospital] = useState('');
   const [urgency, setUrgency] = useState<'Normal' | 'Urgent' | 'Critical'>('Normal');
   const [notes, setNotes] = useState('');
@@ -3991,13 +4030,14 @@ function BloodDonation({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number *</label>
+                <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number * (Format: 03xxxxxxxxx)</label>
                 <input 
                   required
                   type="tel"
                   value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  placeholder="Phone Number"
+                  onChange={(e) => setContact(formatPhone(e.target.value))}
+                  maxLength={11}
+                  placeholder="03xxxxxxxxx"
                   className="w-full p-4 bg-cream border border-border rounded-xl focus:ring-2 focus:ring-rose-500 outline-none"
                 />
               </div>
@@ -4497,7 +4537,7 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
   );
 }
 
-function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onReportEmergency, emergencyTypes, onAddType, onDeleteType, departments }: any) {
+function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onReportEmergency, emergencyTypes, onAddType, onUpdateType, onDeleteType, departments }: any) {
   const [viewMode, setViewMode] = useState<'list' | 'card'>('card');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showTypeManager, setShowTypeManager] = useState(false);
@@ -4512,12 +4552,16 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
   // Form states for manual add
   const [mType, setMType] = useState(relevantEmergencyTypes[0]?.name || 'Electricity');
   const [mName, setMName] = useState('');
-  const [mContact, setMContact] = useState('');
+  const [mContact, setMContact] = useState('03');
   const [mArea, setMArea] = useState('');
   const [mDesc, setMDesc] = useState('');
 
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeDept, setNewTypeDept] = useState('');
+
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+  const [editTypeName, setEditTypeName] = useState('');
+  const [editTypeDept, setEditTypeDept] = useState('');
 
   useEffect(() => {
     if (relevantEmergencyTypes.length > 0 && !mType) {
@@ -4678,21 +4722,74 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {emergencyTypes.map((t: any) => {
               const dept = departments.find((d: any) => d.id === t.deptId);
+              const isEditing = editingTypeId === t.id;
+              
               return (
                 <div key={t.id} className="flex flex-col p-4 bg-cream rounded-2xl border border-border/50 relative group">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm">{t.name}</span>
-                    <button 
-                      onClick={() => onDeleteType(t.id)}
-                      className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted uppercase tracking-widest">
-                    <Building2 size={12} />
-                    {dept?.name || 'No Dept'}
-                  </div>
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <input 
+                        type="text" 
+                        value={editTypeName}
+                        onChange={(e) => setEditTypeName(e.target.value)}
+                        className="w-full px-2 py-1 text-xs border border-border rounded bg-white"
+                      />
+                      <select 
+                        value={editTypeDept}
+                        onChange={(e) => setEditTypeDept(e.target.value)}
+                        className="w-full px-2 py-1 text-[10px] border border-border rounded bg-white"
+                      >
+                        {departments.map((d: any) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => {
+                            onUpdateType(t.id, editTypeName, editTypeDept);
+                            setEditingTypeId(null);
+                          }}
+                          className="flex-1 py-1 bg-ink text-white text-[10px] font-bold rounded"
+                        >
+                          Save
+                        </button>
+                        <button 
+                          onClick={() => setEditingTypeId(null)}
+                          className="flex-1 py-1 bg-paper border border-border text-[10px] font-bold rounded"
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm">{t.name}</span>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => {
+                              setEditingTypeId(t.id);
+                              setEditTypeName(t.name);
+                              setEditTypeDept(t.deptId);
+                            }}
+                            className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                          >
+                            <UserIcon size={14} />
+                          </button>
+                          <button 
+                            onClick={() => onDeleteType(t.id)}
+                            className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted uppercase tracking-widest">
+                        <Building2 size={12} />
+                        {dept?.name || 'No Dept'}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -5080,13 +5177,25 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, onMa
         <div className="p-8 overflow-y-auto">
           <div className="flex justify-between items-start mb-6">
             <div className="flex flex-col gap-2">
-              <button 
-                onClick={onClose}
-                className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-[10px] uppercase tracking-widest mb-2"
-              >
-                <ArrowLeft size={14} /> Back to List
-              </button>
-              <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted w-fit">{complaint.id}</span>
+              <div className="flex items-center justify-between gap-4">
+                <button 
+                  onClick={onClose}
+                  className="flex items-center gap-2 text-muted hover:text-ink transition-colors font-bold text-[10px] uppercase tracking-widest"
+                >
+                  <ArrowLeft size={14} /> Back to List
+                </button>
+                <button 
+                  onClick={() => {
+                    const text = `Complaint ID: ${complaint.id}\nDescription: ${complaint.description}\nResident: ${complaint.resident}\nAddress: ${complaint.address}\nContact: ${complaint.contact}\nStatus: ${complaint.status}`;
+                    navigator.clipboard.writeText(text);
+                    alert('Complaint details copied to clipboard');
+                  }}
+                  className="flex items-center gap-2 px-3 py-1 bg-cream hover:bg-border text-xs font-bold rounded-lg transition-all"
+                >
+                  <Copy size={12} /> Copy Full Info
+                </button>
+              </div>
+              <span className="font-mono text-[10px] bg-cream px-2 py-1 rounded text-muted w-fit mt-2">{complaint.id}</span>
               <h2 className="text-2xl font-serif mt-1 font-bold">{complaint.description}</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-cream rounded-full transition-colors">
@@ -5865,7 +5974,7 @@ function SystemManagementView({ complaints, onBackup, onRestore }: any) {
 
 function JoinRequestModal({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
   const [name, setName] = useState('');
-  const [contact, setContact] = useState('');
+  const [contact, setContact] = useState('03');
   const [address, setAddress] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -5908,13 +6017,14 @@ function JoinRequestModal({ onClose, onSubmit }: { onClose: () => void, onSubmit
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number</label>
+            <label className="text-xs font-bold text-muted uppercase tracking-widest">Contact Number (Format: 03xxxxxxxxx)</label>
             <input 
               required
               type="tel" 
               value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              placeholder="Enter your phone number"
+              onChange={(e) => setContact(formatPhone(e.target.value))}
+              maxLength={11}
+              placeholder="03xxxxxxxxx"
               className="w-full px-4 py-3 bg-cream border border-border rounded-xl outline-none focus:border-accent transition-all"
             />
           </div>
