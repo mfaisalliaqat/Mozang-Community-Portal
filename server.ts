@@ -900,11 +900,26 @@ async function startServer() {
       
       // Active Users Summary
       stats.active_users_summary = {
-        today: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) = date('now') AND userId IS NOT NULL").get().count,
-        threeDays: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-3 days') AND userId IS NOT NULL").get().count,
-        oneWeek: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-7 days') AND userId IS NOT NULL").get().count,
-        oneMonth: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-30 days') AND userId IS NOT NULL").get().count,
-        oneYear: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-365 days') AND userId IS NOT NULL").get().count,
+        today: {
+          count: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) = date('now') AND userId IS NOT NULL").get().count,
+          users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) = date('now')").all()
+        },
+        threeDays: {
+          count: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-3 days') AND userId IS NOT NULL").get().count,
+          users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) >= date('now', '-3 days')").all()
+        },
+        oneWeek: {
+          count: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-7 days') AND userId IS NOT NULL").get().count,
+          users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) >= date('now', '-7 days')").all()
+        },
+        oneMonth: {
+          count: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-30 days') AND userId IS NOT NULL").get().count,
+          users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) >= date('now', '-30 days')").all()
+        },
+        oneYear: {
+          count: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-365 days') AND userId IS NOT NULL").get().count,
+          users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) >= date('now', '-365 days')").all()
+        },
       };
 
       // Retention Analysis (Simple Cohort)
@@ -926,7 +941,7 @@ async function startServer() {
 
       // User Engagement (Top Users) - Now including all users
       stats.top_users = db.prepare(`
-        SELECT u.name, u.role, count(a.id) as event_count, count(DISTINCT sessionId) as session_count
+        SELECT u.id, u.name, u.role, u.color, u.avatar, count(a.id) as event_count, count(DISTINCT sessionId) as session_count
         FROM users u
         LEFT JOIN analytics_events a ON u.id = a.userId
         GROUP BY u.id
@@ -1018,7 +1033,7 @@ async function startServer() {
           await sendPushNotification(emergency.userId, {
             title: "🚨 Emergency Acknowledged",
             body: `Your reported ${emergency.type} emergency has been acknowledged and forwarded to the relevant department.`,
-            data: { url: '/emergencies-admin' }
+            data: { url: '/dashboard' }
           });
         }
       }

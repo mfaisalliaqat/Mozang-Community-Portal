@@ -2288,7 +2288,11 @@ function App() {
                     else if (path === '/dept-complaints') setCurrentPage('dept-complaints');
                     else if (path === '/admin-complaints') setCurrentPage('all-complaints');
                     else if (path === '/announcements') setCurrentPage('announcements');
-                    else if (path === '/emergencies-admin') setCurrentPage('emergencies-admin');
+                    else if (path === '/emergencies-admin') {
+                      if (currentUser.role !== 'resident') setCurrentPage('emergencies-admin');
+                      else setCurrentPage('dashboard');
+                    }
+                    else if (path === '/dashboard') setCurrentPage('dashboard');
                   }}
                 />
               )}
@@ -2314,7 +2318,7 @@ function App() {
                   onDelete={deleteBloodRequest}
                 />
               )}
-              {currentPage === 'emergencies-admin' && (
+              {currentPage === 'emergencies-admin' && currentUser.role !== 'resident' && (
                 <EmergenciesAdmin 
                   user={currentUser}
                   emergencies={emergencies}
@@ -2334,6 +2338,8 @@ function App() {
                   complaints={complaints}
                   users={users}
                   error={analyticsError}
+                  onNavigate={setCurrentPage}
+                  onEditUser={setEditingUserId}
                 />
               )}
               {currentPage === 'join-requests' && currentUser.role === 'admin' && (
@@ -4277,8 +4283,9 @@ function BloodDonation({
   );
 }
 
-function AdvancedAnalytics({ stats, complaints, users, error }: any) {
+function AdvancedAnalytics({ stats, complaints, users, error, onNavigate, onEditUser }: any) {
   const [userSortOrder, setUserSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [selectedDetailPeriod, setSelectedDetailPeriod] = useState<string | null>(null);
   
   if (error) return (
     <div className="p-12 text-center space-y-4">
@@ -4395,20 +4402,28 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
         <h3 className="text-xl font-serif mb-6">User Activity Summary</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: 'Today', value: stats.active_users_summary?.today },
-            { label: '3 Days', value: stats.active_users_summary?.threeDays },
-            { label: '1 Week', value: stats.active_users_summary?.oneWeek },
-            { label: '1 Month', value: stats.active_users_summary?.oneMonth },
-            { label: '1 Year', value: stats.active_users_summary?.oneYear },
-          ].map((item) => (
-            <div key={item.label} className="p-4 bg-cream/50 border border-border rounded-2xl text-center">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">{item.label}</div>
-              <div className="text-2xl font-serif text-ink">{item.value || 0}</div>
-              <div className="text-[10px] text-muted italic mt-1 flex items-center justify-center gap-1">
-                <Users2 size={10} /> active users
-              </div>
-            </div>
-          ))}
+            { label: 'Today', key: 'today' },
+            { label: '3 Days', key: 'threeDays' },
+            { label: '1 Week', key: 'oneWeek' },
+            { label: '1 Month', key: 'oneMonth' },
+            { label: '1 Year', key: 'oneYear' },
+          ].map((card) => {
+            const data = stats.active_users_summary?.[card.key];
+            return (
+              <button 
+                key={card.label}
+                onClick={() => setSelectedDetailPeriod(card.key)}
+                className="p-6 bg-background border border-border rounded-2xl hover:border-accent hover:shadow-md transition-all text-left group"
+              >
+                <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2 group-hover:text-accent">{card.label}</div>
+                <div className="text-3xl font-serif text-ink">{data?.count || 0}</div>
+                <div className="text-[10px] text-accent font-bold mt-2 opacity-0 group-hover:opacity-100 transition-opacity">View Users →</div>
+                <div className="text-[10px] text-muted italic mt-1 flex items-center gap-1">
+                  <Users2 size={10} /> active users
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -4470,13 +4485,23 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
           </div>
           <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
             {[...stats.top_users].sort((a, b) => userSortOrder === 'desc' ? b.event_count - a.event_count : a.event_count - b.event_count).map((u: any, i: number) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-cream/30 rounded-2xl border border-transparent hover:border-border transition-all">
+              <button 
+                key={i} 
+                onClick={() => {
+                  onEditUser(u.id);
+                  onNavigate('manage-users');
+                }}
+                className="w-full flex items-center justify-between p-3 bg-cream/30 rounded-2xl border border-transparent hover:border-border transition-all text-left group"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-ink text-white flex items-center justify-center font-bold text-xs">
-                    {u.name.substring(0, 2).toUpperCase()}
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs text-white"
+                    style={{ backgroundColor: u.color || '#333' }}
+                  >
+                    {u.avatar || u.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-sm font-bold truncate max-w-[120px]">{u.name}</div>
+                    <div className="text-sm font-bold truncate max-w-[120px] group-hover:text-accent transition-colors">{u.name}</div>
                     <div className="text-[10px] text-muted uppercase font-bold tracking-widest">{u.role}</div>
                   </div>
                 </div>
@@ -4484,7 +4509,7 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
                   <div className="text-xs font-bold text-ink">{u.event_count} actions</div>
                   <div className="text-[10px] text-muted">{u.session_count} sess.</div>
                 </div>
-              </div>
+              </button>
             ))}
             {stats.top_users.length === 0 && (
               <div className="py-12 text-center text-muted italic text-sm">No activity recorded yet</div>
@@ -4641,6 +4666,64 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <AnimatePresence>
+        {selectedDetailPeriod && (
+          <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4" onClick={() => setSelectedDetailPeriod(null)}>
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between bg-cream/30">
+                <div>
+                  <h3 className="text-xl font-serif">Active Users</h3>
+                  <p className="text-xs text-muted uppercase tracking-widest font-bold mt-1">
+                    {selectedDetailPeriod === 'threeDays' ? 'Last 3 Days' : selectedDetailPeriod === 'oneWeek' ? 'Last 1 Week' : selectedDetailPeriod === 'oneMonth' ? 'Last 1 Month' : selectedDetailPeriod === 'oneYear' ? 'Last 1 Year' : 'Today'}
+                  </p>
+                </div>
+                <button onClick={() => setSelectedDetailPeriod(null)} className="p-2 hover:bg-white rounded-full transition-colors border border-border/50 shadow-sm"><X size={20}/></button>
+              </div>
+              <div className="p-6 overflow-y-auto space-y-3 custom-scrollbar">
+                {(!stats.active_users_summary?.[selectedDetailPeriod]?.users || stats.active_users_summary?.[selectedDetailPeriod]?.users.length === 0) ? (
+                  <div className="py-12 text-center text-muted italic">No users found for this period.</div>
+                ) : (
+                  stats.active_users_summary?.[selectedDetailPeriod]?.users.map((u: any) => (
+                    <button 
+                      key={u.id}
+                      onClick={() => {
+                        onEditUser(u.id);
+                        onNavigate('manage-users');
+                      }}
+                      className="w-full flex items-center gap-4 p-4 hover:bg-cream rounded-2xl transition-all text-left border border-border/50 group"
+                    >
+                      <div 
+                        className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm"
+                        style={{ backgroundColor: u.color || '#333' }}
+                      >
+                        {u.avatar || u.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-ink group-hover:text-accent transition-colors">{u.name}</div>
+                        <div className="text-[10px] text-muted uppercase tracking-widest font-bold">{u.role} • {u.email}</div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-cream flex items-center justify-center text-muted group-hover:bg-accent group-hover:text-white transition-all">
+                        <ArrowRight size={14} />
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="p-4 border-t border-border bg-cream/10 text-center">
+                <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Click a user to go to their profile</p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
