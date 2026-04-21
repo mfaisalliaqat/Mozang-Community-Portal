@@ -872,7 +872,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser)
       });
-      if (!res.ok) throw new Error('Failed to create user');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to create user');
+      }
       showToast('User created');
       trackEvent('registration', { role: userRole });
       setUserName(''); setUserEmail(''); setUserPass('');
@@ -910,7 +913,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedUser)
       });
-      if (!res.ok) throw new Error('Failed to update user');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update user');
+      }
       showToast('User updated');
       setUserName(''); setUserEmail(''); setUserPass('');
       setUserAvatar(''); setUserColor('');
@@ -4205,6 +4211,8 @@ function BloodDonation({
 }
 
 function AdvancedAnalytics({ stats, complaints, users, error }: any) {
+  const [userSortOrder, setUserSortOrder] = useState<'desc' | 'asc'>('desc');
+  
   if (error) return (
     <div className="p-12 text-center space-y-4">
       <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
@@ -4361,11 +4369,20 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
         </div>
 
         {/* Top Engaging Users */}
-        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
-          <h3 className="text-xl font-serif mb-6">Most Active Users</h3>
-          <div className="space-y-4">
-            {stats.top_users.map((u: any, i: number) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-cream/30 rounded-2xl">
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm flex flex-col max-h-[500px]">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-serif">Most Active Users</h3>
+            <button 
+              onClick={() => setUserSortOrder(userSortOrder === 'desc' ? 'asc' : 'desc')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cream border border-border rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-background transition-colors"
+            >
+              {userSortOrder === 'desc' ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
+              {userSortOrder === 'desc' ? 'High to Low' : 'Low to High'}
+            </button>
+          </div>
+          <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+            {[...stats.top_users].sort((a, b) => userSortOrder === 'desc' ? b.event_count - a.event_count : a.event_count - b.event_count).map((u: any, i: number) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-cream/30 rounded-2xl border border-transparent hover:border-border transition-all">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-ink text-white flex items-center justify-center font-bold text-xs">
                     {u.name.substring(0, 2).toUpperCase()}
@@ -4381,6 +4398,9 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
                 </div>
               </div>
             ))}
+            {stats.top_users.length === 0 && (
+              <div className="py-12 text-center text-muted italic text-sm">No activity recorded yet</div>
+            )}
           </div>
         </div>
       </div>

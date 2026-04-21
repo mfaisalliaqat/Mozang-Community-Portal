@@ -579,7 +579,9 @@ async function startServer() {
   });
 
   app.post("/api/users", (req, res) => {
-    const { id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt } = req.body;
+    const { id, password, role, dept, deptName, avatar, color, address, contact, area, createdAt } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : req.body.name;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : req.body.email;
     
     // Validation for storage optimization
     if (name && name.length > 100) return res.status(400).json({ error: "Name too long" });
@@ -587,6 +589,12 @@ async function startServer() {
     if (address && address.length > 200) return res.status(400).json({ error: "Address too long" });
 
     try {
+      // Check for duplicate username (case-insensitive)
+      const existingUser = db.prepare("SELECT id FROM users WHERE LOWER(name) = LOWER(?)").get(name);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already exists. Please choose a different name." });
+      }
+
       db.prepare(`
         INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -609,8 +617,17 @@ async function startServer() {
   });
 
   app.patch("/api/users/:id", (req, res) => {
-    const { name, email, password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
+    const { password, role, dept, deptName, avatar, color, address, contact, area } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : req.body.name;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : req.body.email;
+
     try {
+      // Check if another user already has this name (case-insensitive)
+      const existingUser: any = db.prepare("SELECT id FROM users WHERE LOWER(name) = LOWER(?) AND id != ?").get(name, req.params.id);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already exists. Please choose a different name." });
+      }
+
       db.prepare(`
         UPDATE users 
         SET name = ?, email = ?, password = ?, role = ?, dept = ?, deptName = ?, avatar = ?, color = ?, address = ?, contact = ?, area = ?
@@ -898,14 +915,13 @@ async function startServer() {
         return { day: d, percentage: total > 0 ? (retained / total) * 100 : 0 };
       });
 
-      // User Engagement (Top Users)
+      // User Engagement (Top Users) - Now including all users
       stats.top_users = db.prepare(`
-        SELECT u.name, u.role, count(*) as event_count, count(DISTINCT sessionId) as session_count
-        FROM analytics_events a
-        JOIN users u ON a.userId = u.id
-        GROUP BY a.userId
+        SELECT u.name, u.role, count(a.id) as event_count, count(DISTINCT sessionId) as session_count
+        FROM users u
+        LEFT JOIN analytics_events a ON u.id = a.userId
+        GROUP BY u.id
         ORDER BY event_count DESC
-        LIMIT 10
       `).all();
 
       // Session Duration & Time per Screen
