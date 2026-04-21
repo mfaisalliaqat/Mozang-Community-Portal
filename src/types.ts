@@ -55,6 +55,7 @@ export interface Complaint {
   address: string;
   contact: string;
   area?: string;
+  locationDetails?: string;
   billReferenceNumber?: string;
   gpsAddress?: string;
   lat?: number;

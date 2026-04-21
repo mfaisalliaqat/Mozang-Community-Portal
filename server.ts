@@ -897,6 +897,15 @@ async function startServer() {
       `).all();
 
       // --- ADVANCED ANALYTICS ---
+      
+      // Active Users Summary
+      stats.active_users_summary = {
+        today: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) = date('now') AND userId IS NOT NULL").get().count,
+        threeDays: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-3 days') AND userId IS NOT NULL").get().count,
+        oneWeek: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-7 days') AND userId IS NOT NULL").get().count,
+        oneMonth: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-30 days') AND userId IS NOT NULL").get().count,
+        oneYear: db.prepare("SELECT count(DISTINCT userId) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-365 days') AND userId IS NOT NULL").get().count,
+      };
 
       // Retention Analysis (Simple Cohort)
       // Users who were active on day X and also active on day X+1, X+7, X+30

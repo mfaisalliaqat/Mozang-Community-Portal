@@ -483,6 +483,7 @@ function App() {
   const [newArea, setNewArea] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newBillRef, setNewBillRef] = useState('');
+  const [newComplaintLocation, setNewComplaintLocation] = useState('');
   const [newSuggestion, setNewSuggestion] = useState('');
 
   // User Management
@@ -1087,7 +1088,8 @@ function App() {
       date: today,
       resident: currentUser?.name || 'Unknown',
       residentId: currentUser?.id || 'Unknown',
-      address: newAddress,
+      address: currentUser?.address || newAddress,
+      locationDetails: newComplaintLocation,
       contact: newContact,
       area: newArea || currentUser?.area,
       billReferenceNumber: newBillRef,
@@ -1116,6 +1118,7 @@ function App() {
       setNewDesc('');
       setNewBillRef('');
       setNewSubCategory('');
+      setNewComplaintLocation('');
       fetchData();
     } catch (e) {
       handleApiError(e);
@@ -2118,6 +2121,7 @@ function App() {
                   newCategory={newCategory} setNewCategory={setNewCategory}
                   newSubCategory={newSubCategory} setNewSubCategory={setNewSubCategory}
                   newAddress={newAddress} setNewAddress={setNewAddress}
+                  newComplaintLocation={newComplaintLocation} setNewComplaintLocation={setNewComplaintLocation}
                   newContact={newContact} setNewContact={setNewContact}
                   newArea={newArea} setNewArea={setNewArea}
                   areas={areas}
@@ -2127,6 +2131,7 @@ function App() {
                   onCancel={() => setCurrentPage('dashboard')}
                   departments={departments}
                   subCategories={subCategories}
+                  user={currentUser}
                 />
               )}
               {currentPage === 'submit-suggestion' && (
@@ -2947,6 +2952,7 @@ function SubmitForm({
   newCategory, setNewCategory, 
   newSubCategory, setNewSubCategory,
   newAddress, setNewAddress, 
+  newComplaintLocation, setNewComplaintLocation,
   newContact, setNewContact,
   newArea, setNewArea,
   areas,
@@ -2954,7 +2960,8 @@ function SubmitForm({
   newBillRef, setNewBillRef,
   onSubmit, onCancel,
   departments,
-  subCategories
+  subCategories,
+  user
 }: any) {
   const filteredSubs = subCategories.filter((s: any) => s.deptId === newCategory);
   const showBillRef = ['water', 'electricity', 'gas'].includes(newCategory);
@@ -3006,16 +3013,29 @@ function SubmitForm({
             </select>
           </div>
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-semibold tracking-wide">Complete Address *</label>
+            <label className="text-xs font-semibold tracking-wide">Complete Address (from Profile - Read Only)</label>
             <div className="relative">
               <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
               <input 
                 type="text" 
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
+                value={user?.address || ''}
+                readOnly
+                className="w-full pl-12 pr-4 py-3 bg-paper/50 border border-border rounded-lg outline-none cursor-not-allowed text-muted"
+                placeholder="No address in profile"
+              />
+            </div>
+          </div>
+          <div className="md:col-span-2 space-y-1.5">
+            <label className="text-xs font-semibold tracking-wide">Complaint Location (if different from profile address)</label>
+            <div className="relative">
+              <MapPin className="absolute left-4 top-3.5 text-muted" size={18} />
+              <input 
+                type="text" 
+                value={newComplaintLocation}
+                onChange={(e) => setNewComplaintLocation(e.target.value)}
                 maxLength={300}
                 className="w-full pl-12 pr-4 py-3 bg-paper border border-border rounded-lg outline-none focus:border-accent transition-colors"
-                placeholder="Enter your complete address"
+                placeholder="Enter specific location or landmark if different"
               />
             </div>
           </div>
@@ -3314,11 +3334,40 @@ function AdminUsersView({
     setUserColor('');
   };
 
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredUsers = users.filter((u: any) => 
+    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.contact || '').includes(searchTerm) ||
+    (u.area || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (u.id || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const openWhatsApp = (contact: string) => {
+    if (!contact) return;
+    // Format: 03001234567 -> 923001234567
+    const formatted = contact.startsWith('0') ? '92' + contact.slice(1) : contact;
+    window.open(`https://wa.me/${formatted}`, '_blank');
+  };
+
   return (
     <div className="space-y-8">
-      <div className="page-header">
-        <h1 className="text-4xl font-serif">Manage Users</h1>
-        <p className="text-muted mt-1">Create and manage resident and officer accounts.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="page-header">
+          <h1 className="text-4xl font-serif">Manage Users</h1>
+          <p className="text-muted mt-1">Create and manage resident and officer accounts.</p>
+        </div>
+        <div className="relative w-full md:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
+          <input 
+            type="text" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search name, email, contact..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-border rounded-xl outline-none focus:border-accent"
+          />
+        </div>
       </div>
 
       <div className="bg-white border border-border rounded-2xl p-8 shadow-sm space-y-6">
@@ -3471,13 +3520,14 @@ function AdminUsersView({
             <tr className="bg-cream border-bottom border-border">
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest w-12">#</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">User</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Contact</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Role</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest">Department</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest px-6">Department</th>
               <th className="px-6 py-4 text-[10px] font-bold text-muted uppercase tracking-widest text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {users.map((u: any, idx: number) => (
+            {filteredUsers.map((u: any, idx: number) => (
               <tr key={u.id} className="hover:bg-cream/50 transition-colors">
                 <td className="px-6 py-4 text-xs font-mono text-muted">
                   {idx + 1}
@@ -3494,6 +3544,19 @@ function AdminUsersView({
                       <div className="font-medium text-ink">{u.name}</div>
                       <div className="text-xs text-muted">{u.email}</div>
                     </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{u.contact || '-'}</span>
+                    {u.contact && (
+                      <button 
+                         onClick={() => openWhatsApp(u.contact)}
+                         className="p-1.5 bg-green/10 text-green rounded-lg hover:bg-green/20 transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
+                      >
+                         <Share size={12} /> WhatsApp
+                      </button>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -4328,6 +4391,27 @@ function AdvancedAnalytics({ stats, complaints, users, error }: any) {
         </div>
       </div>
 
+      <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+        <h3 className="text-xl font-serif mb-6">User Activity Summary</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: 'Today', value: stats.active_users_summary?.today },
+            { label: '3 Days', value: stats.active_users_summary?.threeDays },
+            { label: '1 Week', value: stats.active_users_summary?.oneWeek },
+            { label: '1 Month', value: stats.active_users_summary?.oneMonth },
+            { label: '1 Year', value: stats.active_users_summary?.oneYear },
+          ].map((item) => (
+            <div key={item.label} className="p-4 bg-cream/50 border border-border rounded-2xl text-center">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">{item.label}</div>
+              <div className="text-2xl font-serif text-ink">{item.value || 0}</div>
+              <div className="text-[10px] text-muted italic mt-1 flex items-center justify-center gap-1">
+                <Users2 size={10} /> active users
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Retention Cohorts */}
         <div className="lg:col-span-2 bg-white border border-border rounded-3xl p-8 shadow-sm">
@@ -5015,6 +5099,18 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
                   <div className="flex items-center gap-2">
                     <Phone size={14} className="text-muted" />
                     <span className="text-xs font-bold">{e.userContact}</span>
+                    {e.userContact && (
+                      <button 
+                        onClick={() => {
+                          const formatted = e.userContact.startsWith('0') ? '92' + e.userContact.slice(1) : e.userContact;
+                          window.open(`https://wa.me/${formatted}`, '_blank');
+                        }}
+                        className="p-1 bg-green/10 text-green rounded hover:bg-green/20 transition-all ml-1"
+                        title="Connect on WhatsApp"
+                      >
+                        <Share size={10} />
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin size={14} className="text-muted" />
@@ -5249,7 +5345,21 @@ function ComplaintModal({ complaint, onClose, onUpdateStatus, onAddComment, onMa
             </div>
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Contact Phone</div>
-              <div className="text-sm font-bold flex items-center gap-2 text-accent"><Phone size={14} /> {complaint.contact}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-bold flex items-center gap-2 text-accent"><Phone size={14} /> {complaint.contact}</div>
+                {user.role !== 'resident' && complaint.contact && (
+                  <button 
+                    onClick={() => {
+                      const formatted = complaint.contact.startsWith('0') ? '92' + complaint.contact.slice(1) : complaint.contact;
+                      window.open(`https://wa.me/${formatted}`, '_blank');
+                    }}
+                    className="p-1 bg-green/10 text-green rounded hover:bg-green/20 transition-all"
+                    title="Connect on WhatsApp"
+                  >
+                    <Share size={12} />
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <div className="text-[10px] font-bold text-muted uppercase tracking-widest mb-1">Date Submitted</div>
