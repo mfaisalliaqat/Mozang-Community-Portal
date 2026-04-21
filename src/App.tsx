@@ -593,6 +593,10 @@ function App() {
       } else if (announcementId) {
         setCurrentPage('announcements');
       }
+
+      if (complaintId || emergencyId || announcementId) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     };
 
     if (complaints.length > 0) {
@@ -5034,8 +5038,9 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
                   onClick={() => {
                     const report = `EMERGENCY REPORT\nType: ${e.type}\nArea: ${e.area}\nResident: ${e.userName}\nContact: ${e.userContact}\nTime: ${new Date(e.timestamp).toLocaleString()}\nDescription: ${e.description}`;
                     navigator.clipboard.writeText(report);
-                    // Using a simple alert since showToast isn't passed here
-                    alert('Report copied to clipboard for sharing!');
+                    // Update status to 'forwarded' to trigger notification
+                    onUpdateStatus(e.id, 'forwarded');
+                    alert('Report acknowledged, forwarded to department, and copied to clipboard!');
                   }}
                   className="flex-1 py-3 bg-ink text-white rounded-xl font-bold hover:bg-ink/90 transition-all flex items-center justify-center gap-2 text-sm"
                 >

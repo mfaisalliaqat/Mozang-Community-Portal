@@ -998,10 +998,22 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/emergencies/:id", (req, res) => {
+  app.patch("/api/emergencies/:id", async (req, res) => {
     const { status } = req.body;
     try {
       db.prepare("UPDATE emergencies SET status = ? WHERE id = ?").run(status, req.params.id);
+      
+      if (status === 'forwarded') {
+        const emergency = db.prepare("SELECT * FROM emergencies WHERE id = ?").get(req.params.id);
+        if (emergency && emergency.userId) {
+          await sendPushNotification(emergency.userId, {
+            title: "🚨 Emergency Acknowledged",
+            body: `Your reported ${emergency.type} emergency has been acknowledged and forwarded to the relevant department.`,
+            data: { url: '/emergencies-admin' }
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error updating emergency:', error);
