@@ -595,6 +595,14 @@ async function startServer() {
         return res.status(400).json({ error: "Username already exists. Please choose a different name." });
       }
 
+      // Check for duplicate contact
+      if (contact) {
+        const existingContact = db.prepare("SELECT id FROM users WHERE contact = ?").get(contact);
+        if (existingContact) {
+          return res.status(400).json({ error: "A user with this phone number is already registered." });
+        }
+      }
+
       db.prepare(`
         INSERT INTO users (id, name, email, password, role, dept, deptName, avatar, color, address, contact, area, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -921,6 +929,24 @@ async function startServer() {
           users: db.prepare("SELECT DISTINCT u.id, u.name, u.email, u.role, u.color, u.avatar FROM analytics_events a JOIN users u ON a.userId = u.id WHERE date(a.timestamp) >= date('now', '-365 days')").all()
         },
       };
+
+      // Website Traffic Summary (Total Hits)
+      stats.traffic_summary = {
+        today: db.prepare("SELECT count(*) as count FROM analytics_events WHERE date(timestamp) = date('now')").get().count,
+        oneWeek: db.prepare("SELECT count(*) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-7 days')").get().count,
+        oneMonth: db.prepare("SELECT count(*) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-30 days')").get().count,
+        oneYear: db.prepare("SELECT count(*) as count FROM analytics_events WHERE date(timestamp) >= date('now', '-365 days')").get().count,
+      };
+
+      // Top Traffic Sharers
+      // We look for sources matching 'ref_USERID'
+      stats.top_sharers = db.prepare(`
+        SELECT u.id, u.name, u.avatar, u.color, count(a.id) as traffic_count
+        FROM users u
+        JOIN analytics_events a ON a.source = 'ref_' || u.id
+        GROUP BY u.id
+        ORDER BY traffic_count DESC
+      `).all();
 
       // Retention Analysis (Simple Cohort)
       // Users who were active on day X and also active on day X+1, X+7, X+30
@@ -1351,6 +1377,18 @@ async function startServer() {
   app.post("/api/join-requests", (req, res) => {
     const { id, name, contact, address, timestamp } = req.body;
     try {
+      // Check for duplicate pending join request
+      const existingRequest = db.prepare("SELECT id FROM join_requests WHERE contact = ? AND status = 'pending'").get(contact);
+      if (existingRequest) {
+        return res.status(400).json({ error: "A join request with this phone number is already pending. Please wait for approval." });
+      }
+
+      // Also check if user with this contact already exists in users table
+      const existingUser = db.prepare("SELECT id FROM users WHERE contact = ?").get(contact);
+      if (existingUser) {
+        return res.status(400).json({ error: "A user with this phone number is already registered in the system." });
+      }
+
       db.prepare("INSERT INTO join_requests (id, name, contact, address, timestamp) VALUES (?, ?, ?, ?, ?)")
         .run(id, name, contact, address, timestamp || new Date().toISOString());
       res.status(201).json({ success: true });

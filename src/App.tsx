@@ -760,12 +760,16 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRequest)
       });
-      if (!res.ok) throw new Error('Failed to submit request');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to submit request');
+      }
       showToast('Your interest has been submitted successfully!');
       setShowJoinModal(false);
       fetchData();
     } catch (e) {
-      handleApiError(e);
+      const msg = e instanceof Error ? e.message : 'Submission failed';
+      showToast(msg);
     }
   };
 
@@ -2502,12 +2506,24 @@ function Dashboard({
             <h1 className="text-4xl font-serif leading-tight">Good morning, {user.name.split(' ')[0]} 👋</h1>
             <p className="text-muted mt-1">Here's the status of your community complaints.</p>
           </div>
-          <button 
-            onClick={() => onNavigate('submit')}
-            className="px-6 py-3 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20 flex items-center gap-2"
-          >
-            <PlusCircle size={18} /> New Complaint
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}?source=ref_${user.id}`;
+                navigator.clipboard.writeText(url);
+                alert("Shareable link copied to clipboard! Share it with your neighbors to help Mozang grow.");
+              }}
+              className="px-6 py-3 bg-white border border-border text-ink rounded-xl font-bold hover:bg-cream transition-all shadow-sm flex items-center gap-2"
+            >
+              <Share size={18} className="text-accent" /> Share Portal
+            </button>
+            <button 
+              onClick={() => onNavigate('submit')}
+              className="px-6 py-3 bg-accent text-white rounded-xl font-bold hover:bg-accent/90 transition-all shadow-lg shadow-accent/20 flex items-center gap-2"
+            >
+              <PlusCircle size={18} /> New Complaint
+            </button>
+          </div>
         </div>
 
         {/* Emergency Section */}
@@ -4427,6 +4443,29 @@ function AdvancedAnalytics({ stats, complaints, users, error, onNavigate, onEdit
         </div>
       </div>
 
+      <div className="bg-white border border-border rounded-3xl p-8 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-serif">Website Traffic Summary</h3>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted">Total Events / Hits</div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Today', value: stats.traffic_summary?.today },
+            { label: 'Last 7 Days', value: stats.traffic_summary?.oneWeek },
+            { label: 'Last 30 Days', value: stats.traffic_summary?.oneMonth },
+            { label: 'Last Year', value: stats.traffic_summary?.oneYear },
+          ].map((item) => (
+            <div key={item.label} className="p-6 bg-cream/30 border border-border rounded-2xl">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted mb-2">{item.label}</div>
+              <div className="text-3xl font-serif text-ink">{item.value || 0}</div>
+              <div className="flex items-center gap-1.5 mt-3 text-[10px] text-accent font-bold uppercase">
+                <BarChart3 size={10} /> Hits recorded
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Retention Cohorts */}
         <div className="lg:col-span-2 bg-white border border-border rounded-3xl p-8 shadow-sm">
@@ -4513,6 +4552,48 @@ function AdvancedAnalytics({ stats, complaints, users, error, onNavigate, onEdit
             ))}
             {stats.top_users.length === 0 && (
               <div className="py-12 text-center text-muted italic text-sm">No activity recorded yet</div>
+            )}
+          </div>
+        </div>
+
+        {/* Top Traffic Sharers */}
+        <div className="bg-white border border-border rounded-3xl p-8 shadow-sm flex flex-col max-h-[500px]">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-serif">Top Traffic Sharers</h3>
+            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Share2 size={16} />
+            </div>
+          </div>
+          <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+            {stats.top_sharers.map((u: any, i: number) => (
+              <button 
+                key={i} 
+                onClick={() => {
+                  onEditUser(u.id);
+                  onNavigate('manage-users');
+                }}
+                className="w-full flex items-center justify-between p-3 bg-blue-50/30 rounded-2xl border border-transparent hover:border-blue-200 transition-all text-left group"
+              >
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs text-white"
+                    style={{ backgroundColor: u.color || '#333' }}
+                  >
+                    {u.avatar || u.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold truncate max-w-[120px] group-hover:text-blue-600 transition-colors">{u.name}</div>
+                    <div className="text-[10px] text-muted uppercase font-bold tracking-widest">Growth Driver</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-blue-600">{u.traffic_count} hits</div>
+                  <div className="text-[10px] text-muted">via shared link</div>
+                </div>
+              </button>
+            ))}
+            {stats.top_sharers.length === 0 && (
+              <div className="py-12 text-center text-muted italic text-sm">No referral traffic recorded yet</div>
             )}
           </div>
         </div>
@@ -5205,7 +5286,7 @@ function EmergenciesAdmin({ user, emergencies, onUpdateStatus, onDelete, onRepor
               </div>
 
               <div className={`flex gap-2 ${viewMode === 'list' ? 'flex-col min-w-[140px]' : 'mt-6'}`}>
-                {e.status === 'pending' && (
+                {e.status !== 'resolved' && (
                   <button 
                     onClick={() => onUpdateStatus(e.id, 'resolved')}
                     className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 text-sm"
